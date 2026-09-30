@@ -22,7 +22,7 @@ export function getApi(): ApiClient {
         'NEXT_PUBLIC_API_URL is not set — point it at the eque-backend API (e.g. http://localhost:8080)',
       );
     }
-    cached = hc<AppType>(baseUrl);
+    cached = hc<AppType>(baseUrl.replace(/\/+$/, ''));
   }
   return cached;
 }
