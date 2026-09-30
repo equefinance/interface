@@ -34,10 +34,6 @@ export function useOraclePrices(): {
     s.endsWith('c') && !symbols.includes(s.slice(0, -1)) ? s.slice(0, -1) : s;
 
   const { data, isLoading, isError } = useReadContracts({
-    // Pin reads to the browsed chain — without this wagmi falls back to the
-    // connected (or first configured) chain, silently mispricing every
-    // non-default chain's TVL as $0.
-    chainId: chainConfig.id,
     contracts: symbols.map(
       (s) =>
         ({
@@ -45,6 +41,10 @@ export function useOraclePrices(): {
           abi: feedAbi,
           functionName: 'latestRoundData',
           args: [],
+          // Pin reads to the browsed chain — without this wagmi falls back
+          // to the connected (or first configured) chain, silently
+          // mispricing every non-default chain's TVL as $0.
+          chainId: chainConfig.id,
         }) as const,
     ),
     query: { refetchInterval: 30_000 },
