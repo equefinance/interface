@@ -1,0 +1,214 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-display);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-heading: var(--font-display);
+  /* Eque brand tokens (DESIGN.md) */
+  --color-eque-bg: #070a0f;
+  --color-eque-surface: #0d1219;
+  --color-eque-raised: #131a23;
+  --color-eque-high: #1a222d;
+  --color-eque-line: #1a222d;
+  --color-eque-border: #252f3c;
+  --color-eque-strong: #384555;
+  --color-eque-teal: #1fffc3;
+  --color-eque-teal-hover: #5cffd3;
+  --color-eque-teal-pressed: #00e0a4;
+  --color-eque-ink: #031a14;
+  --color-eque-text: #e4eaf0;
+  --color-eque-text-2: #a9b5c2;
+  --color-eque-text-3: #8f9cad;
+  --color-eque-muted: #718094;
+  --color-eque-disabled: #4a5768;
+  --color-eque-hero: #f4f7fa;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.511 0.096 186.391);
+  --primary-foreground: oklch(0.984 0.014 180.72);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.855 0.138 181.071);
+  --chart-2: oklch(0.704 0.14 182.503);
+  --chart-3: oklch(0.6 0.118 184.704);
+  --chart-4: oklch(0.511 0.096 186.391);
+  --chart-5: oklch(0.437 0.078 188.216);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.6 0.118 184.704);
+  --sidebar-primary-foreground: oklch(0.984 0.014 180.72);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  /* Eque DESIGN.md tokens */
+  --background: #070a0f;
+  --foreground: #e4eaf0;
+  --card: #0d1219;
+  --card-foreground: #e4eaf0;
+  --popover: #0d1219;
+  --popover-foreground: #e4eaf0;
+  --primary: #1fffc3;
+  --primary-foreground: #031a14;
+  --secondary: #131a23;
+  --secondary-foreground: #e4eaf0;
+  --muted: #1a222d;
+  --muted-foreground: #a9b5c2;
+  --accent: #1fffc3;
+  --accent-foreground: #031a14;
+  --destructive: #ff6b6b;
+  --border: #1a222d;
+  --input: #252f3c;
+  --ring: #1fffc3;
+  --radius: 0rem;
+  --chart-1: #1fffc3;
+  --chart-2: #5be37d;
+  --chart-3: #4da3ff;
+  --chart-4: #ffb020;
+  --chart-5: #ff6b6b;
+  --sidebar: #0d1219;
+  --sidebar-foreground: #e4eaf0;
+  --sidebar-primary: #1fffc3;
+  --sidebar-primary-foreground: #031a14;
+  --sidebar-accent: #131a23;
+  --sidebar-accent-foreground: #e4eaf0;
+  --sidebar-border: #1a222d;
+  --sidebar-ring: #1fffc3;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Pixel-notch corners — primary buttons (DESIGN.md stepped-corner accent) */
+.pixel-notch {
+  --n: 4px;
+  clip-path: polygon(
+    0 var(--n), var(--n) var(--n), var(--n) 0,
+    calc(100% - var(--n)) 0, calc(100% - var(--n)) var(--n), 100% var(--n),
+    100% calc(100% - var(--n)), calc(100% - var(--n)) calc(100% - var(--n)), calc(100% - var(--n)) 100%,
+    var(--n) 100%, var(--n) calc(100% - var(--n)), 0 calc(100% - var(--n))
+  );
+}
+
+/* Corner brackets — secondary buttons, featured cards */
+.bracket { position: relative; }
+.bracket::before, .bracket::after {
+  content: ""; position: absolute; width: 8px; height: 8px;
+  border: 2px solid var(--color-eque-teal);
+  pointer-events: none;
+}
+.bracket::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+.bracket::after  { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+
+/* Scroll cue — pixel dot travelling down a faint track (hero) */
+@keyframes scroll-cue {
+  0%   { transform: translateY(-6px); opacity: 0; }
+  25%  { opacity: 1; }
+  75%  { opacity: 1; }
+  100% { transform: translateY(30px); opacity: 0; }
+}
+.scroll-cue-dot {
+  animation: scroll-cue 1.9s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+/* Rotating hero ticker — blur-rise swap (neutralized under reduced-motion by the global rule) */
+@keyframes ticker-swap {
+  from { opacity: 0; transform: translateY(0.35em); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0);       filter: blur(0); }
+}
+.ticker-swap {
+  animation: ticker-swap 0.5s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+/* ASCII canvas: let vertical page scroll pass through on touch devices */
+.ascii-touch canvas {
+  touch-action: pan-y !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* CTA zoom pin: GSAP writes an explicit px height/max-height on the pinned
+   section (measured once at pin time). On Chrome Android, hiding the URL bar
+   grows the visual viewport afterward, leaving a URL-bar-sized gap below the
+   fixed section. !important beats GSAP's inline style so the section always
+   tracks the dynamic viewport instead. */
+.cta-zoom-pin {
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+}
