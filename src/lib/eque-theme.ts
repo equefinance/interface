@@ -1,0 +1,60 @@
+import { midnightTheme, type Theme } from '@rainbow-me/rainbowkit';
+
+/**
+ * RainbowKit modal restyled to the Eque design system: near-black canvas,
+ * neon teal accent, sharp 0px corners (no rounding anywhere, per DESIGN.md),
+ * Spline Sans Mono for type.
+ */
+export const equeTheme: Theme = {
+  ...midnightTheme(),
+  colors: {
+    ...midnightTheme().colors,
+    accentColor: '#1FFFC3',
+    accentColorForeground: '#031A14',
+    actionButtonBorder: '#252F3C',
+    actionButtonBorderMobile: '#252F3C',
+    actionButtonSecondaryBackground: '#0D1219',
+    closeButton: '#A9B5C2',
+    closeButtonBackground: '#131A23',
+    connectButtonBackground: '#0D1219',
+    connectButtonBackgroundError: '#1A222D',
+    connectButtonInnerBackground: '#131A23',
+    connectButtonText: '#E4EAF0',
+    connectButtonTextError: '#FF6B6B',
+    connectionIndicator: '#5BE37D',
+    downloadBottomCardBackground: '#0D1219',
+    downloadTopCardBackground: '#131A23',
+    error: '#FF6B6B',
+    generalBorder: '#1A222D',
+    generalBorderDim: '#1A222D',
+    menuItemBackground: '#131A23',
+    modalBackground: '#0D1219',
+    modalBorder: '#252F3C',
+    modalText: '#E4EAF0',
+    modalTextDim: '#718094',
+    modalTextSecondary: '#A9B5C2',
+    profileAction: '#131A23',
+    profileActionHover: '#1A222D',
+    profileForeground: '#0D1219',
+    selectedOptionBorder: '#1FFFC3',
+    standby: '#FFB020',
+  },
+  fonts: {
+    body: 'Spline Sans Mono, ui-monospace, monospace',
+  },
+  radii: {
+    actionButton: '0px',
+    connectButton: '0px',
+    menuButton: '0px',
+    modal: '0px',
+    modalMobile: '0px',
+  },
+  shadows: {
+    connectButton: 'none',
+    dialog: 'none',
+    profileDetailsAction: 'none',
+    selectedOption: 'none',
+    selectedWallet: 'none',
+    walletLogo: 'none',
+  },
+};
