@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/app-shell';
 import { AppProviders } from './providers';
 
 export default function AppLayout({
@@ -7,7 +8,9 @@ export default function AppLayout({
 }>) {
   return (
     <div className="min-h-svh bg-eque-bg text-eque-text">
-      <AppProviders>{children}</AppProviders>
+      <AppProviders>
+        <AppShell>{children}</AppShell>
+      </AppProviders>
     </div>
   );
 }
