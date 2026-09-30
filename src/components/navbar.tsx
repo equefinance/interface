@@ -169,7 +169,7 @@ export function Navbar() {
                 </motion.ul>
                 <motion.div variants={itemVariants} className="border-t border-eque-line p-4">
                   <a
-                    href="#"
+                    href="/dashboard"
                     onClick={() => setOpen(false)}
                     className="pixel-notch font-display flex h-11 items-center justify-center bg-eque-teal text-sm font-medium tracking-[0.02em] text-eque-ink transition-colors duration-150 hover:bg-eque-teal-hover"
                   >

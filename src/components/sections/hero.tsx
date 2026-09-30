@@ -69,7 +69,7 @@ export function Hero({ paused = false }: { paused?: boolean }) {
 
           <div className="mt-10 flex flex-row items-center justify-center gap-3 md:justify-start">
             <a
-              href="#"
+              href="/dashboard"
               className="pixel-notch font-display pointer-events-auto inline-flex h-11 items-center bg-[#1FFFC3] px-6 text-sm font-medium tracking-[0.02em] text-[#031A14] transition-colors duration-120 hover:bg-[#5CFFD3] hover:shadow-[0_0_24px_rgba(31,255,195,0.24)] active:translate-y-[1px] active:bg-[#00E0A4]"
             >
               Launch App
