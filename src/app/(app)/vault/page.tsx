@@ -1,14 +1,15 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DepositPanel } from '@/components/vault/deposit-panel';
 import { EpochHistory } from '@/components/vault/epoch-history';
 import { EpochPanel } from '@/components/vault/epoch-panel';
+import { AlertBanner } from '@/components/molecules/AlertBanner/AlertBanner';
+import { Tabs } from '@/components/molecules/Tabs/Tabs';
 import { useVaults } from '@/hooks/use-vaults';
 import { CHAIN_META } from '@/lib/chains';
 import { useChain } from '@/lib/chain-context';
-import { cn } from '@/lib/utils';
 
 function VaultPageInner() {
   const { chain } = useChain();
@@ -17,17 +18,16 @@ function VaultPageInner() {
   const requested = searchParams.get('symbol');
 
   const symbols = useMemo(() => vaults.map((v) => v.symbol), [vaults]);
-  const [active, setActive] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
-  // Follow ?symbol= when it names a real vault; otherwise first vault.
-  // Resets when the chain (and therefore the vault list) changes.
-  useEffect(() => {
-    if (symbols.length === 0) {
-      setActive(null);
-      return;
-    }
-    setActive(requested && symbols.includes(requested) ? requested : symbols[0]);
-  }, [symbols, requested, chain]);
+  // Follow ?symbol= when it names a real vault; otherwise the first vault.
+  // Derived during render (no effect): a user-picked tab sticks while it
+  // still names a real vault, and resets when the chain changes the list.
+  const active =
+    (selected && symbols.includes(selected) ? selected : null) ??
+    (requested && symbols.includes(requested) ? requested : null) ??
+    symbols[0] ??
+    null;
 
   const vault = vaults.find((v) => v.symbol === active) ?? null;
 
@@ -46,10 +46,12 @@ function VaultPageInner() {
       </div>
 
       {error ? (
-        <div className="mt-8 border border-[#FF6B6B]/40 bg-eque-surface p-6">
-          <p className="font-display text-sm text-[#FF6B6B]">
-            Couldn&apos;t reach the API. Is <span className="tabular-nums">NEXT_PUBLIC_API_URL</span> set?
-          </p>
+        <div className="mt-8">
+          <AlertBanner
+            status="error"
+            title="Couldn't reach the API"
+            message="Is NEXT_PUBLIC_API_URL set and the backend running?"
+          />
         </div>
       ) : isLoading || !vault ? (
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
@@ -59,26 +61,16 @@ function VaultPageInner() {
         </div>
       ) : (
         <>
-          <div className="mt-8 inline-flex border border-eque-line bg-eque-surface" role="tablist" aria-label="Vaults">
-            {symbols.map((s) => (
-              <button
-                key={s}
-                role="tab"
-                aria-selected={s === active}
-                type="button"
-                onClick={() => setActive(s)}
-                className={cn(
-                  'font-display px-5 py-2.5 text-[13px] font-semibold tracking-[0.08em] transition-colors duration-150',
-                  s === active ? 'bg-eque-teal text-eque-ink' : 'text-eque-muted hover:text-eque-text',
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            tabs={symbols.map((s) => ({ value: s, label: s }))}
+            value={active ?? undefined}
+            onValueChange={(v) => setSelected(v)}
+            className="mt-8"
+            aria-label="Vaults"
+          />
 
           <div className="mt-4 grid items-start gap-4 lg:grid-cols-2">
-            <DepositPanel symbol={vault.symbol} />
+            <DepositPanel key={`${chain}:${vault.symbol}`} symbol={vault.symbol} />
             <EpochPanel vault={vault} />
           </div>
 

@@ -1,43 +1,32 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { formatUnits } from 'viem';
 import { ConnectButtonEque } from '@/components/connect-button';
-import { VaultCard } from '@/components/vault-card';
+import { AlertBanner } from '@/components/molecules/AlertBanner/AlertBanner';
+import { EmptyState } from '@/components/molecules/EmptyState/EmptyState';
+import { StatCard } from '@/components/molecules/StatCard/StatCard';
+import { VaultCard, type VaultCardData } from '@/components/organisms/VaultCard/VaultCard';
+import { useOraclePrices } from '@/hooks/use-oracle-prices';
 import { usePortfolio } from '@/hooks/use-portfolio';
-import { useVaults } from '@/hooks/use-vaults';
+import { useVaults, type VaultSummary } from '@/hooks/use-vaults';
 import { CHAIN_META } from '@/lib/chains';
 import { useChain } from '@/lib/chain-context';
-import { fmtApy, fmtTokens } from '@/lib/format';
-
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="border border-eque-line bg-eque-surface p-4 sm:p-5">
-      <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">{label}</p>
-      <p
-        className={`font-display mt-2 text-2xl font-semibold tabular-nums sm:text-[28px] ${
-          accent ? 'text-eque-teal' : 'text-eque-hero'
-        }`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
+import { TOKEN_DECIMALS } from '@/lib/eque-contracts';
+import { fmtApy, fmtTokens, underlyingOf } from '@/lib/format';
+import { formatTvl } from '@/lib/utils';
 
 function PortfolioSection() {
   const { positions, isLoading, isConnected } = usePortfolio();
 
   if (!isConnected) {
     return (
-      <div className="mt-10 border border-dashed border-eque-border p-6 text-center sm:p-8">
-        <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">
-          ┌─ your position ─┐
-        </p>
-        <p className="font-body mx-auto mt-3 max-w-[46ch] text-sm leading-relaxed text-eque-text-2">
-          Connect your wallet to see your eVault shares, accrued value, and live epoch exposure.
-        </p>
-        <div className="mt-5 flex justify-center">
-          <ConnectButtonEque />
-        </div>
+      <div className="mt-10">
+        <EmptyState
+          title="No wallet connected"
+          description="Connect your wallet to see your eVault shares, accrued value, and live epoch exposure."
+          action={<ConnectButtonEque />}
+        />
       </div>
     );
   }
@@ -45,9 +34,7 @@ function PortfolioSection() {
   if (isLoading) {
     return (
       <div className="mt-10 border border-eque-line bg-eque-surface p-6">
-        <p className="font-display text-[13px] tracking-[0.08em] text-eque-muted">
-          Loading positions…
-        </p>
+        <p className="font-display text-[13px] tracking-[0.08em] text-eque-muted">Loading positions…</p>
       </div>
     );
   }
@@ -55,22 +42,18 @@ function PortfolioSection() {
   const active = positions.filter((p) => BigInt(p.shares) > 0n);
   if (active.length === 0) {
     return (
-      <div className="mt-10 border border-eque-line bg-eque-surface p-6 sm:p-8">
-        <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">
-          ┌─ your position ─┐
-        </p>
-        <p className="font-body mt-3 text-sm leading-relaxed text-eque-text-2">
-          No shares yet. Deposit into a vault to start earning options premium every epoch.
-        </p>
+      <div className="mt-10">
+        <EmptyState
+          title="No shares yet"
+          description="Deposit into a vault to start earning options premium every epoch."
+        />
       </div>
     );
   }
 
   return (
     <section className="mt-10" aria-label="Your positions">
-      <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">
-        ┌─ your position ─┐
-      </p>
+      <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">┌─ your position ─┐</p>
       <div className="mt-4 overflow-x-auto border border-eque-line">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead>
@@ -109,13 +92,51 @@ function PortfolioSection() {
   );
 }
 
+function vaultCardData(
+  vault: VaultSummary,
+  chainLabel: string,
+  tvlUsd: number | undefined,
+): VaultCardData {
+  const underlying = underlyingOf(vault.symbol);
+  return {
+    id: vault.vault,
+    name: vault.symbol,
+    depositToken: underlying,
+    apyBase: (vault.apy ?? 0) * 100,
+    apyReward: 0,
+    apyBoost: 0,
+    tvl: tvlUsd ?? 0,
+    // No risk classification: the backend doesn't provide one, so the card
+    // omits the indicator instead of inventing a label.
+    status: 'active',
+    chain: chainLabel,
+    strategy: 'Covered-call premium',
+    tags: [underlying, 'Testnet'],
+    audited: false,
+  };
+}
+
 export default function DashboardPage() {
   const { chain } = useChain();
+  const router = useRouter();
   const { vaults, isLoading, error } = useVaults();
+  const { prices, isLoading: pricesLoading, isError: pricesError } = useOraclePrices();
 
-  const totalTvl = vaults.reduce((sum, v) => sum + (v.tvl === null ? 0n : BigInt(v.tvl)), 0n);
+  const tvlUsdOf = (vault: VaultSummary): number | undefined => {
+    if (vault.tvl === null) return undefined;
+    const price = prices[underlyingOf(vault.symbol)];
+    if (price === undefined) return undefined;
+    return Number(formatUnits(BigInt(vault.tvl), TOKEN_DECIMALS)) * price;
+  };
+
+  const loading = isLoading || pricesLoading;
+  const totalTvlUsd = vaults.reduce((sum, v) => sum + (tvlUsdOf(v) ?? 0), 0);
   const bestApy = vaults.reduce((best, v) => Math.max(best, v.apy ?? 0), 0);
   const liveEpochs = vaults.filter((v) => v.activeEpoch !== null).length;
+  const bestApyId =
+    bestApy > 0 ? (vaults.find((v) => (v.apy ?? 0) >= bestApy)?.vault ?? null) : null;
+
+  const goVault = (symbol: string) => router.push(`/vault?symbol=${encodeURIComponent(symbol)}`);
 
   return (
     <>
@@ -132,35 +153,59 @@ export default function DashboardPage() {
       </div>
 
       {error ? (
-        <div className="mt-8 border border-[#FF6B6B]/40 bg-eque-surface p-6">
-          <p className="font-display text-sm text-[#FF6B6B]">
-            Couldn&apos;t reach the API. Is <span className="tabular-nums">NEXT_PUBLIC_API_URL</span> set?
-          </p>
+        <div className="mt-8">
+          <AlertBanner
+            status="error"
+            title="Couldn't reach the API"
+            message="Is NEXT_PUBLIC_API_URL set and the backend running?"
+          />
         </div>
-      ) : isLoading ? (
-        <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-[92px] animate-pulse border border-eque-line bg-eque-surface" />
-          ))}
+      ) : pricesError && !loading ? (
+        <div className="mt-8">
+          <AlertBanner
+            status="warning"
+            title="Couldn't load token prices"
+            message="The RPC isn't responding — TVL figures are hidden until it does."
+          />
         </div>
       ) : (
         <>
           <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat label="TOTAL TVL" value={fmtTokens(totalTvl.toString())} />
-            <Stat label="BEST APY" value={fmtApy(bestApy)} accent />
-            <Stat label="VAULTS" value={String(vaults.length)} />
-            <Stat label="LIVE EPOCHS" value={String(liveEpochs)} />
+            <StatCard label="TOTAL TVL" value={loading ? '—' : formatTvl(totalTvlUsd)} loading={loading} />
+            <StatCard label="BEST APY" value={loading ? '—' : fmtApy(bestApy)} loading={loading} />
+            <StatCard label="VAULTS" value={loading ? '—' : String(vaults.length)} loading={loading} />
+            <StatCard
+              label="LIVE EPOCHS"
+              value={loading ? '—' : String(liveEpochs)}
+              loading={loading}
+            />
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {vaults.map((vault) => (
-              <VaultCard key={vault.vault} vault={vault} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              {[0, 1].map((i) => (
+                <div key={i} className="h-[280px] animate-pulse border border-eque-line bg-eque-surface" />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              {vaults.map((vault) => (
+                <VaultCard
+                  key={vault.vault}
+                  vault={vaultCardData(vault, CHAIN_META[chain].label, tvlUsdOf(vault))}
+                  featured={vault.vault === bestApyId}
+                  onSelect={() => goVault(vault.symbol)}
+                  onDeposit={() => goVault(vault.symbol)}
+                  depositLabel="Deposit"
+                />
+              ))}
+            </div>
+          )}
 
-          <PortfolioSection />
         </>
       )}
+
+      {!error && <PortfolioSection />}
     </>
   );
 }

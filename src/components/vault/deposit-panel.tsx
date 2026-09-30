@@ -3,32 +3,47 @@
 import { useMemo, useState } from 'react';
 import { formatUnits, parseUnits } from 'viem';
 import { useAccount, useReadContract, useSwitchChain, useWriteContract } from 'wagmi';
-import { waitForTransactionReceipt } from 'wagmi/actions';
+import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
 import { ConnectButtonEque } from '@/components/connect-button';
+import {
+  DepositWithdrawPanel,
+  type DepositWithdrawTab,
+} from '@/components/organisms/DepositWithdrawPanel/DepositWithdrawPanel';
+import type { ApproveStepStatus } from '@/components/organisms/ApproveTokenFlow/ApproveTokenFlow';
+import {
+  TransactionStatusModal,
+  type TransactionStatus,
+} from '@/components/organisms/TransactionStatusModal/TransactionStatusModal';
+import { useNow } from '@/hooks/use-now';
+import { useOraclePrices } from '@/hooks/use-oracle-prices';
 import { baseSepolia, robinhoodTestnet, type AppChainKey } from '@/lib/chains';
 import { useChain } from '@/lib/chain-context';
 import { TOKEN_DECIMALS, getVaultContracts, vaultQueueAbi } from '@/lib/eque-contracts';
 import { fmtCountdown, fmtTokens } from '@/lib/format';
-import { useNow } from '@/hooks/use-now';
-import { cn } from '@/lib/utils';
+import { tokenOf } from '@/lib/mock-data/tokens';
 import { wagmiConfig } from '@/lib/wagmi';
-
-type Status =
-  | { kind: 'idle' }
-  | { kind: 'working'; label: string }
-  | { kind: 'done'; hash: string }
-  | { kind: 'error'; message: string };
 
 const chainIdOf = (chain: AppChainKey): number =>
   chain === 'robinhood-testnet' ? robinhoodTestnet.id : baseSepolia.id;
 
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+interface TxModal {
+  open: boolean;
+  status: TransactionStatus;
+  title: string;
+  txHash?: `0x${string}`;
+  errorMessage?: string;
+}
+
 /**
- * Deposit / withdraw panel.
+ * Deposit / withdraw, built on the eque-ui DepositWithdrawPanel.
  *
- * Deposit is instant ERC-4626 (approve + deposit). Withdrawals are
- * epoch-aware: requestRedeem(shares) queues the exit, claim() pays out once
- * the running epoch settles. Mil alone signs — this only builds calldata and
- * asks his wallet to sign.
+ * Deposit is instant ERC-4626. The kit's withdraw tab is intercepted:
+ * Eque exits are epoch-aware, so it queues requestRedeem(shares) instead of
+ * an instant withdraw, and the queued position becomes claim()able below
+ * once the running epoch settles. Mil alone signs — this only builds
+ * calldata and asks his wallet to sign.
  */
 export function DepositPanel({ symbol }: { symbol: string }) {
   const { chain } = useChain();
@@ -36,24 +51,20 @@ export function DepositPanel({ symbol }: { symbol: string }) {
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const now = useNow(30_000);
+  const { prices } = useOraclePrices();
 
-  const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
-  const [amount, setAmount] = useState('');
-  const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const [approveStatus, setApproveStatus] = useState<ApproveStepStatus>('pending');
+  const [depositStatus, setDepositStatus] = useState<ApproveStepStatus>('pending');
+  const [modal, setModal] = useState<TxModal>({ open: false, status: 'pending', title: '' });
 
   const contracts = useMemo(() => getVaultContracts(chain, symbol), [chain, symbol]);
+  const underlying = contracts.underlying;
   const targetChainId = chainIdOf(chain);
   const onRightChain = chainId === targetChainId;
   const enabled = isConnected && onRightChain && address !== undefined;
-
-  const parsed = useMemo(() => {
-    try {
-      const v = parseUnits(amount.trim() === '' ? '0' : amount.trim(), TOKEN_DECIMALS);
-      return v > 0n ? v : null;
-    } catch {
-      return null;
-    }
-  }, [amount]);
+  const explorerUrl = (
+    chain === 'robinhood-testnet' ? robinhoodTestnet : baseSepolia
+  ).blockExplorers?.default.url;
 
   const { data: tokenBal, refetch: refetchTokenBal } = useReadContract({
     address: contracts.token,
@@ -79,21 +90,13 @@ export function DepositPanel({ symbol }: { symbol: string }) {
     chainId: targetChainId,
     query: { enabled },
   });
-  const { data: previewShares } = useReadContract({
+  const { data: withdrawableAssets } = useReadContract({
     address: contracts.vault,
     abi: contracts.vaultAbi,
-    functionName: 'previewDeposit',
-    args: parsed === null ? undefined : [parsed],
+    functionName: 'convertToAssets',
+    args: sharesBal === undefined ? undefined : [sharesBal],
     chainId: targetChainId,
-    query: { enabled: enabled && mode === 'deposit' && parsed !== null },
-  });
-  const { data: redeemShares } = useReadContract({
-    address: contracts.vault,
-    abi: contracts.vaultAbi,
-    functionName: 'convertToShares',
-    args: parsed === null ? undefined : [parsed],
-    chainId: targetChainId,
-    query: { enabled: enabled && mode === 'withdraw' && parsed !== null },
+    query: { enabled: enabled && sharesBal !== undefined },
   });
   const { data: pendingRedeem, refetch: refetchPending } = useReadContract({
     address: contracts.vault,
@@ -112,237 +115,221 @@ export function DepositPanel({ symbol }: { symbol: string }) {
     query: { enabled },
   });
 
-  const needsApproval = parsed !== null && (allowance ?? 0n) < parsed;
-  const working = status.kind === 'working';
-  const hasPendingRedeem = (pendingRedeem ?? 0n) > 0n;
-  const claimReady = hasPendingRedeem && redeemReadyAt !== undefined && BigInt(redeemReadyAt) <= BigInt(now);
-
-  const send = async (label: string, tx: () => Promise<`0x${string}`>) => {
+  // Exact-amount approval per deposit (never unlimited): the panel hands us the
+  // raw decimal string so parseUnits never sees a float round-trip.
+  const toAssets = (amountStr: string): bigint | null => {
+    const s = amountStr.trim();
+    if (!/^\d+(\.\d+)?$/.test(s)) return null;
     try {
-      setStatus({ kind: 'working', label });
-      const hash = await tx();
-      await waitForTransactionReceipt(wagmiConfig, { hash });
-      setStatus({ kind: 'done', hash });
-      setAmount('');
-      void refetchTokenBal();
-      void refetchShares();
-      void refetchAllowance();
-      void refetchPending();
-    } catch (e) {
-      setStatus({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+      return parseUnits(s, TOKEN_DECIMALS);
+    } catch {
+      return null;
     }
   };
 
-  const runDeposit = () => {
-    if (!address || !parsed) return;
-    void send('Approving & depositing…', async () => {
-      if (needsApproval) {
-        const approveHash = await writeContractAsync({
-          address: contracts.token,
-          abi: contracts.tokenAbi,
-          functionName: 'approve',
-          args: [contracts.vault, parsed],
-          chainId: targetChainId,
-        });
-        await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
+  // Approval covers exactly the entered deposit amount; a fresh approval is
+  // needed per deposit once the previous allowance is spent.
+  const needsApproval = (allowance ?? 0n) === 0n;
+  const hasPendingRedeem = (pendingRedeem ?? 0n) > 0n;
+  const claimReady =
+    hasPendingRedeem && redeemReadyAt !== undefined && BigInt(redeemReadyAt) <= BigInt(now);
+  const busy = modal.open && modal.status === 'pending';
+
+  const fail = (title: string) => (e: unknown) =>
+    setModal((m) => ({ ...m, status: 'failed', errorMessage: errMsg(e), title }));
+
+  const onApprove = (amountStr: string) => {
+    if (!address) return;
+    const assets = toAssets(amountStr);
+    if (assets === null || assets === 0n) return;
+    setApproveStatus('loading');
+    setModal({ open: true, status: 'pending', title: `Approving ${amountStr} ${underlying}` });
+    writeContractAsync({
+      address: contracts.token,
+      abi: contracts.tokenAbi,
+      functionName: 'approve',
+      args: [contracts.vault, assets],
+      chainId: targetChainId,
+    })
+      .then(async (hash) => {
+        setModal((m) => ({ ...m, txHash: hash }));
+        await waitForTransactionReceipt(wagmiConfig, { hash });
         await refetchAllowance();
-      }
-      return writeContractAsync({
+        setApproveStatus('done');
+        setModal((m) => ({ ...m, status: 'success' }));
+      })
+      .catch(fail(`Approving ${underlying}`));
+  };
+
+  const onSubmit = (tab: DepositWithdrawTab, amountStr: string) => {
+    if (!address) return;
+    if (tab === 'deposit') {
+      const assets = toAssets(amountStr);
+      if (assets === null || assets === 0n) return;
+      const amount = amountStr.trim();
+      setDepositStatus('loading');
+      setModal({ open: true, status: 'pending', title: `Depositing ${amount} ${underlying}` });
+      writeContractAsync({
         address: contracts.vault,
         abi: contracts.vaultAbi,
         functionName: 'deposit',
-        args: [parsed, address],
+        args: [assets, address],
         chainId: targetChainId,
-      });
-    });
-  };
-
-  const runRequestRedeem = () => {
-    if (!address || redeemShares === undefined) return;
-    void send('Queueing redeem…', () =>
-      writeContractAsync({
-        address: contracts.vault,
-        abi: vaultQueueAbi,
-        functionName: 'requestRedeem',
-        args: [redeemShares],
-        chainId: targetChainId,
-      }),
-    );
+      })
+        .then(async (hash) => {
+          setModal((m) => ({ ...m, txHash: hash }));
+          await waitForTransactionReceipt(wagmiConfig, { hash });
+          setDepositStatus('done');
+          setModal((m) => ({ ...m, status: 'success' }));
+          void refetchTokenBal();
+          void refetchShares();
+          void refetchAllowance();
+        })
+        .catch(fail(`Depositing ${amount} ${underlying}`));
+      return;
+    }
+    // Epoch-aware exit: the kit's withdraw amount is underlying-denominated,
+    // requestRedeem takes shares — convert on the spot, then queue.
+    const amount = amountStr.trim();
+    const assets = toAssets(amountStr);
+    if (assets === null || assets === 0n) return;
+    setModal({ open: true, status: 'pending', title: `Queueing redeem of ${amount} ${underlying}` });
+    readContract(wagmiConfig, {
+      address: contracts.vault,
+      abi: contracts.vaultAbi,
+      functionName: 'convertToShares',
+      args: [assets],
+      chainId: targetChainId,
+    })
+      .then((shares) => {
+        if (shares === 0n) throw new Error('Amount too small — converts to 0 shares.');
+        return writeContractAsync({
+          address: contracts.vault,
+          abi: vaultQueueAbi,
+          functionName: 'requestRedeem',
+          args: [shares],
+          chainId: targetChainId,
+        });
+      })
+      .then(async (hash) => {
+        setModal((m) => ({ ...m, txHash: hash }));
+        await waitForTransactionReceipt(wagmiConfig, { hash });
+        setModal((m) => ({ ...m, status: 'success' }));
+        void refetchShares();
+        void refetchPending();
+      })
+      .catch(fail(`Queueing redeem of ${amount} ${underlying}`));
   };
 
   const runClaim = () => {
     if (!address) return;
-    void send('Claiming…', () =>
-      writeContractAsync({
-        address: contracts.vault,
-        abi: vaultQueueAbi,
-        functionName: 'claim',
-        chainId: targetChainId,
-      }),
-    );
-  };
-
-  const setMax = () => {
-    const max = mode === 'deposit' ? tokenBal : sharesBal;
-    if (max === undefined) return;
-    // Withdraw input is denominated in underlying; approximate from shares.
-    setAmount(formatUnits(max, TOKEN_DECIMALS));
+    setModal({ open: true, status: 'pending', title: `Claiming ${underlying}` });
+    writeContractAsync({
+      address: contracts.vault,
+      abi: vaultQueueAbi,
+      functionName: 'claim',
+      chainId: targetChainId,
+    })
+      .then(async (hash) => {
+        setModal((m) => ({ ...m, txHash: hash }));
+        await waitForTransactionReceipt(wagmiConfig, { hash });
+        setModal((m) => ({ ...m, status: 'success' }));
+        void refetchTokenBal();
+        void refetchPending();
+      })
+      .catch(fail(`Claiming ${underlying}`));
   };
 
   return (
-    <div className="border border-eque-line bg-eque-surface">
-      <div className="flex border-b border-eque-line" role="tablist" aria-label="Deposit or withdraw">
-        {(['deposit', 'withdraw'] as const).map((m) => (
+    <div>
+      {!isConnected ? (
+        <div className="border border-eque-line bg-eque-surface p-6 text-center sm:p-8">
+          <p className="font-body text-sm text-eque-text-2">
+            Connect your wallet to deposit or withdraw.
+          </p>
+          <div className="mt-4 flex justify-center">
+            <ConnectButtonEque />
+          </div>
+        </div>
+      ) : !onRightChain ? (
+        <div className="border border-eque-line bg-eque-surface p-6 text-center sm:p-8">
+          <p className="font-body text-sm leading-relaxed text-eque-text-2">
+            Your wallet is on the wrong network. Switch to{' '}
+            {chain === 'robinhood-testnet' ? 'Robinhood Testnet' : 'Base Sepolia'} to continue.
+          </p>
           <button
-            key={m}
-            role="tab"
-            aria-selected={mode === m}
             type="button"
-            onClick={() => {
-              setMode(m);
-              setAmount('');
-              setStatus({ kind: 'idle' });
-            }}
-            className={cn(
-              'font-display flex-1 px-4 py-3 text-[13px] font-medium tracking-[0.08em] transition-colors duration-150',
-              mode === m ? 'bg-eque-raised text-eque-teal' : 'text-eque-muted hover:text-eque-text',
-            )}
+            disabled={isSwitching}
+            onClick={() => switchChain({ chainId: targetChainId })}
+            className="font-display mt-4 inline-flex h-10 items-center border border-eque-teal/60 px-5 text-[13px] font-medium tracking-[0.04em] text-eque-teal transition-colors hover:bg-eque-teal hover:text-eque-ink disabled:opacity-50"
           >
-            {m === 'deposit' ? 'DEPOSIT' : 'WITHDRAW'}
+            {isSwitching ? 'Switching…' : 'Switch network'}
           </button>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <DepositWithdrawPanel
+          vaultName={symbol}
+          token={tokenOf(underlying)}
+          tokenBalance={Number(formatUnits(tokenBal ?? 0n, TOKEN_DECIMALS))}
+          withdrawableBalance={Number(formatUnits(withdrawableAssets ?? 0n, TOKEN_DECIMALS))}
+          tokenPriceUsd={prices[underlying]}
+          minAmount={0}
+          depositFeeBps={0}
+          withdrawFeeBps={0}
+          slippageBps={0}
+          needsApproval={needsApproval}
+          approveStatus={approveStatus}
+          depositStatus={depositStatus}
+          submitting={busy}
+          onApprove={onApprove}
+          onSubmit={onSubmit}
+        />
+      )}
 
-      <div className="p-5 sm:p-6">
-        {!isConnected ? (
-          <div className="py-4 text-center">
-            <p className="font-body text-sm text-eque-text-2">
-              Connect your wallet to {mode === 'deposit' ? 'deposit' : 'withdraw'}.
+      {hasPendingRedeem && (
+        <div className="mt-4 border border-eque-border bg-eque-bg p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="font-display text-[12px] tracking-[0.1em] text-eque-muted">QUEUED REDEEM</p>
+            <p className="font-display text-lg font-semibold tabular-nums text-eque-text">
+              {fmtTokens((pendingRedeem ?? 0n).toString())}{' '}
+              <span className="text-[12px] font-medium text-eque-muted">shares</span>
             </p>
-            <div className="mt-4 flex justify-center">
-              <ConnectButtonEque />
-            </div>
           </div>
-        ) : !onRightChain ? (
-          <div className="py-4 text-center">
-            <p className="font-body text-sm leading-relaxed text-eque-text-2">
-              Your wallet is on the wrong network. Switch to{' '}
-              {chain === 'robinhood-testnet' ? 'Robinhood Testnet' : 'Base Sepolia'} to continue.
-            </p>
-            <button
-              type="button"
-              disabled={isSwitching}
-              onClick={() => switchChain({ chainId: targetChainId })}
-              className="font-display mt-4 inline-flex h-10 items-center border border-eque-teal/60 px-5 text-[13px] font-medium tracking-[0.04em] text-eque-teal transition-colors hover:bg-eque-teal hover:text-eque-ink disabled:opacity-50"
-            >
-              {isSwitching ? 'Switching…' : 'Switch network'}
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between">
-              <label
-                htmlFor="vault-amount"
-                className="font-display text-[11px] tracking-[0.18em] text-eque-muted"
-              >
-                AMOUNT ({contracts.underlying})
-              </label>
-              <button
-                type="button"
-                onClick={setMax}
-                className="font-display text-[11px] tracking-[0.1em] text-eque-teal hover:underline"
-              >
-                MAX
-              </button>
-            </div>
-            <input
-              id="vault-amount"
-              inputMode="decimal"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => {
-                setAmount(e.target.value);
-                if (status.kind !== 'idle') setStatus({ kind: 'idle' });
-              }}
-              className="font-display mt-2 h-14 w-full border border-eque-border bg-eque-bg px-4 text-2xl tabular-nums text-eque-hero outline-none placeholder:text-eque-disabled focus:border-eque-teal/60"
-            />
-            <div className="font-body mt-2 flex justify-between text-[12px] text-eque-muted">
-              <span>
-                Balance: {fmtTokens(((mode === 'deposit' ? tokenBal : sharesBal) ?? 0n).toString())}
-              </span>
-              {mode === 'deposit' && previewShares !== undefined && parsed !== null && (
-                <span>≈ {fmtTokens(previewShares.toString())} shares</span>
-              )}
-              {mode === 'withdraw' && redeemShares !== undefined && parsed !== null && (
-                <span>≈ {fmtTokens(redeemShares.toString())} shares</span>
-              )}
-            </div>
-
-            <button
-              type="button"
-              disabled={parsed === null || working}
-              onClick={mode === 'deposit' ? runDeposit : runRequestRedeem}
-              className="font-display mt-5 inline-flex h-12 w-full items-center justify-center bg-eque-teal text-[14px] font-semibold tracking-[0.06em] text-eque-ink transition-colors hover:bg-eque-teal-hover disabled:cursor-not-allowed disabled:bg-eque-disabled disabled:text-eque-muted"
-            >
-              {working
-                ? status.label
-                : mode === 'deposit'
-                  ? needsApproval
-                    ? 'Approve & Deposit'
-                    : 'Deposit'
-                  : 'Request redeem'}
-            </button>
-
-            <p className="font-body mt-3 text-[12px] leading-relaxed text-eque-muted">
-              {mode === 'deposit'
-                ? 'Deposits are epoch-aware — funds entering mid-epoch are queued by the vault and start earning from the next epoch.'
-                : 'Redeems are queued and become claimable once the running epoch settles, so exits never break an active option.'}
-            </p>
-
-            {mode === 'withdraw' && hasPendingRedeem && (
-              <div className="mt-4 border border-eque-border bg-eque-bg p-4">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="font-display text-[12px] tracking-[0.1em] text-eque-muted">
-                    QUEUED REDEEM
-                  </p>
-                  <p className="font-display text-lg font-semibold tabular-nums text-eque-text">
-                    {fmtTokens((pendingRedeem ?? 0n).toString())}{' '}
-                    <span className="text-[12px] font-medium text-eque-muted">shares</span>
-                  </p>
-                </div>
-                <p className="font-body mt-1 text-[12px] text-eque-muted">
-                  {claimReady ? (
-                    <span className="text-eque-teal">Claimable now.</span>
-                  ) : redeemReadyAt !== undefined ? (
-                    <>Claimable in {fmtCountdown(Number(redeemReadyAt) - now)}.</>
-                  ) : (
-                    'Settling…'
-                  )}
-                </p>
-                <button
-                  type="button"
-                  disabled={!claimReady || working}
-                  onClick={runClaim}
-                  className="font-display mt-3 inline-flex h-10 w-full items-center justify-center border border-eque-teal/60 text-[13px] font-medium tracking-[0.04em] text-eque-teal transition-colors hover:bg-eque-teal hover:text-eque-ink disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {working ? status.label : 'Claim'}
-                </button>
-              </div>
+          <p className="font-body mt-1 text-[12px] text-eque-muted">
+            {claimReady ? (
+              <span className="text-eque-teal">Claimable now.</span>
+            ) : redeemReadyAt !== undefined ? (
+              <>Claimable in {fmtCountdown(Number(redeemReadyAt) - now)}.</>
+            ) : (
+              'Settling…'
             )}
+          </p>
+          <button
+            type="button"
+            disabled={!claimReady || busy}
+            onClick={runClaim}
+            className="font-display mt-3 inline-flex h-10 w-full items-center justify-center border border-eque-teal/60 text-[13px] font-medium tracking-[0.04em] text-eque-teal transition-colors hover:bg-eque-teal hover:text-eque-ink disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? 'Working…' : 'Claim'}
+          </button>
+        </div>
+      )}
 
-            {status.kind === 'done' && (
-              <p className="font-display mt-4 border border-eque-teal/40 bg-eque-teal/5 px-4 py-3 text-[12px] text-eque-teal">
-                Confirmed — tx {status.hash.slice(0, 10)}…{status.hash.slice(-8)}
-              </p>
-            )}
-            {status.kind === 'error' && (
-              <p className="font-body mt-4 border border-[#FF6B6B]/40 bg-[#FF6B6B]/5 px-4 py-3 text-[12px] leading-relaxed text-[#FF6B6B]">
-                {status.message.length > 220 ? `${status.message.slice(0, 220)}…` : status.message}
-              </p>
-            )}
-          </>
-        )}
-      </div>
+      <p className="font-body mt-3 text-[12px] leading-relaxed text-eque-muted">
+        Deposits are epoch-aware — funds entering mid-epoch start earning from the next epoch.
+        Withdraws are queued and become claimable once the running epoch settles, so exits never
+        break an active option.
+      </p>
+
+      <TransactionStatusModal
+        open={modal.open}
+        onOpenChange={(open) => setModal((m) => ({ ...m, open }))}
+        status={modal.status}
+        title={modal.title}
+        txHash={modal.txHash}
+        explorerUrl={explorerUrl}
+        errorMessage={modal.errorMessage}
+      />
     </div>
   );
 }

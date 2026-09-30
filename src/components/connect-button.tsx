@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 const truncate = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 const buttonClass =
-  'font-display inline-flex h-10 items-center gap-2 border px-4 text-[13px] font-medium tracking-[0.04em] transition-colors duration-150';
+  'font-display inline-flex h-10 items-center gap-2 border px-4 text-[13px] font-medium tracking-[0.04em] whitespace-nowrap transition-colors duration-150';
 
 /**
  * Eque-styled connect button built on RainbowKit's `ConnectButton.Custom`:
