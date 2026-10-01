@@ -21,9 +21,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Eque — DeFi, rebuilt onchain",
+  title: "Eque",
   description:
-    "Eque is a dark, minimal DeFi interface. Quiet canvas, one loud signal.",
+    "Options-premium vaults for tokenized stocks. Deposit once — every epoch's auction compounds the premium back to you.",
   icons: {
     icon: [{ url: "/favicon.ico", type: "image/x-icon" }],
     apple: [

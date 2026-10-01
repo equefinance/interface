@@ -2,11 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { formatUnits } from 'viem';
-import { ConnectButtonEque } from '@/components/connect-button';
+import { WalletMenu } from '@/components/wallet-menu';
 import { AlertBanner } from '@/components/molecules/AlertBanner/AlertBanner';
 import { EmptyState } from '@/components/molecules/EmptyState/EmptyState';
 import { StatCard } from '@/components/molecules/StatCard/StatCard';
-import { VaultCard, type VaultCardData } from '@/components/organisms/VaultCard/VaultCard';
+import { PortfolioSummaryCard } from '@/components/organisms/PortfolioSummaryCard/PortfolioSummaryCard';
+import { VaultListGrid } from '@/components/organisms/VaultListGrid/VaultListGrid';
+import { type VaultCardData } from '@/components/organisms/VaultCard/VaultCard';
 import { useOraclePrices } from '@/hooks/use-oracle-prices';
 import { usePortfolio } from '@/hooks/use-portfolio';
 import { useVaults, type VaultSummary } from '@/hooks/use-vaults';
@@ -18,6 +20,8 @@ import { formatTvl } from '@/lib/utils';
 
 function PortfolioSection() {
   const { positions, isLoading, isConnected } = usePortfolio();
+  const { vaults } = useVaults();
+  const { prices } = useOraclePrices();
 
   if (!isConnected) {
     return (
@@ -25,7 +29,7 @@ function PortfolioSection() {
         <EmptyState
           title="No wallet connected"
           description="Connect your wallet to see your eVault shares, accrued value, and live epoch exposure."
-          action={<ConnectButtonEque />}
+          action={<WalletMenu />}
         />
       </div>
     );
@@ -51,9 +55,36 @@ function PortfolioSection() {
     );
   }
 
+  const usdOf = (symbol: string, amount: string): number => {
+    const price = prices[underlyingOf(symbol)];
+    if (price === undefined) return 0;
+    return Number(formatUnits(BigInt(amount), TOKEN_DECIMALS)) * price;
+  };
+  const apyOf = (symbol: string): number =>
+    vaults.find((v) => v.symbol === symbol)?.apy ?? 0;
+
+  // Principal ≈ shares (1 share ≈ 1 underlying at deposit); earned is the
+  // share-price appreciation on top — both read straight from the chain.
+  const totalDeposited = active.reduce((s, p) => s + usdOf(p.symbol, p.shares), 0);
+  const totalEarned = active.reduce((s, p) => {
+    const assets = BigInt(p.assets);
+    const shares = BigInt(p.shares);
+    const gain = assets > shares ? assets - shares : 0n;
+    return s + usdOf(p.symbol, gain.toString());
+  }, 0);
+  const dailyYield = active.reduce(
+    (s, p) => s + (usdOf(p.symbol, p.assets) * apyOf(p.symbol)) / 100 / 365,
+    0,
+  );
+
   return (
     <section className="mt-10" aria-label="Your positions">
-      <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">┌─ your position ─┐</p>
+      <PortfolioSummaryCard
+        totalDeposited={totalDeposited}
+        totalEarned={totalEarned}
+        dailyYield={dailyYield}
+        monthlyYield={dailyYield * 30}
+      />
       <div className="mt-4 overflow-x-auto border border-eque-line">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead>
@@ -133,24 +164,13 @@ export default function DashboardPage() {
   const totalTvlUsd = vaults.reduce((sum, v) => sum + (tvlUsdOf(v) ?? 0), 0);
   const bestApy = vaults.reduce((best, v) => Math.max(best, v.apy ?? 0), 0);
   const liveEpochs = vaults.filter((v) => v.activeEpoch !== null).length;
-  const bestApyId =
-    bestApy > 0 ? (vaults.find((v) => (v.apy ?? 0) >= bestApy)?.vault ?? null) : null;
-
   const goVault = (symbol: string) => router.push(`/vault?symbol=${encodeURIComponent(symbol)}`);
 
   return (
     <>
-      <p className="font-display text-[11px] tracking-[0.2em] text-eque-muted" aria-hidden="true">
-        ┌─ dashboard ─┐
-      </p>
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-eque-hero sm:text-4xl">
-          Dashboard
-        </h1>
-        <p className="font-display text-[12px] tracking-[0.14em] text-eque-muted">
-          {CHAIN_META[chain].label.toUpperCase()}
-        </p>
-      </div>
+      <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-eque-hero sm:text-4xl">
+        Dashboard
+      </h1>
 
       {error ? (
         <div className="mt-8">
@@ -181,27 +201,16 @@ export default function DashboardPage() {
             />
           </div>
 
-          {loading ? (
-            <div className="mt-8 grid gap-4 md:grid-cols-2">
-              {[0, 1].map((i) => (
-                <div key={i} className="h-[280px] animate-pulse border border-eque-line bg-eque-surface" />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-8 grid gap-4 md:grid-cols-2">
-              {vaults.map((vault) => (
-                <VaultCard
-                  key={vault.vault}
-                  vault={vaultCardData(vault, CHAIN_META[chain].label, tvlUsdOf(vault))}
-                  featured={vault.vault === bestApyId}
-                  onSelect={() => goVault(vault.symbol)}
-                  onDeposit={() => goVault(vault.symbol)}
-                  depositLabel="Deposit"
-                />
-              ))}
-            </div>
-          )}
-
+          <VaultListGrid
+            vaults={vaults.map((vault) =>
+              vaultCardData(vault, CHAIN_META[chain].label, tvlUsdOf(vault)),
+            )}
+            loading={loading}
+            onSelect={(v) => goVault(v.name)}
+            onDeposit={(v) => goVault(v.name)}
+            pageSize={6}
+            className="mt-8"
+          />
         </>
       )}
 

@@ -1,3 +1,4 @@
+import { Toaster } from '@/components/molecules/Toaster/Toaster';
 import { AppShell } from '@/components/app-shell';
 import { AppProviders } from './providers';
 
@@ -10,6 +11,7 @@ export default function AppLayout({
     <div className="min-h-svh bg-eque-bg text-eque-text">
       <AppProviders>
         <AppShell>{children}</AppShell>
+        <Toaster />
       </AppProviders>
     </div>
   );

@@ -24,9 +24,6 @@ export function EpochPanel({ vault }: { vault: VaultSummary }) {
   return (
     <div className="border border-eque-line bg-eque-surface p-5 sm:p-6">
       <div className="flex items-center justify-between">
-        <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">
-          ┌─ live epoch ─┐
-        </p>
         {epoch && (
           <span
             className={cn(

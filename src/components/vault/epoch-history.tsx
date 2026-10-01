@@ -19,11 +19,7 @@ export function EpochHistory({ symbol }: { symbol: string }) {
 
   return (
     <section aria-label="Epoch history" className="mt-8">
-      <p className="font-display text-[11px] tracking-[0.18em] text-eque-muted">
-        ┌─ epoch history ─┐
-      </p>
-
-      <div className="mt-4 overflow-x-auto border border-eque-line bg-eque-surface">
+      <div className="overflow-x-auto border border-eque-line bg-eque-surface">
         {isLoading ? (
           <p className="font-display p-6 text-[13px] tracking-[0.08em] text-eque-muted">
             Loading epochs…

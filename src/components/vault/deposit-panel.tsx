@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import { formatUnits, parseUnits } from 'viem';
 import { useAccount, useReadContract, useSwitchChain, useWriteContract } from 'wagmi';
 import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
-import { ConnectButtonEque } from '@/components/connect-button';
+import { WalletMenu } from '@/components/wallet-menu';
+import { notify } from '@/components/molecules/Toaster/Toaster';
 import {
   DepositWithdrawPanel,
   type DepositWithdrawTab,
@@ -135,8 +136,10 @@ export function DepositPanel({ symbol }: { symbol: string }) {
     hasPendingRedeem && redeemReadyAt !== undefined && BigInt(redeemReadyAt) <= BigInt(now);
   const busy = modal.open && modal.status === 'pending';
 
-  const fail = (title: string) => (e: unknown) =>
+  const fail = (title: string) => (e: unknown) => {
+    notify.error(title, { description: errMsg(e) });
     setModal((m) => ({ ...m, status: 'failed', errorMessage: errMsg(e), title }));
+  };
 
   const onApprove = (amountStr: string) => {
     if (!address) return;
@@ -157,6 +160,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
         await refetchAllowance();
         setApproveStatus('done');
         setModal((m) => ({ ...m, status: 'success' }));
+        notify.success(`Approved ${amountStr} ${underlying}`);
       })
       .catch(fail(`Approving ${underlying}`));
   };
@@ -181,6 +185,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
           await waitForTransactionReceipt(wagmiConfig, { hash });
           setDepositStatus('done');
           setModal((m) => ({ ...m, status: 'success' }));
+          notify.success(`Deposited ${amount} ${underlying}`);
           void refetchTokenBal();
           void refetchShares();
           void refetchAllowance();
@@ -215,6 +220,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
         setModal((m) => ({ ...m, txHash: hash }));
         await waitForTransactionReceipt(wagmiConfig, { hash });
         setModal((m) => ({ ...m, status: 'success' }));
+        notify.success('Redeem queued — claimable after the epoch settles.');
         void refetchShares();
         void refetchPending();
       })
@@ -234,6 +240,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
         setModal((m) => ({ ...m, txHash: hash }));
         await waitForTransactionReceipt(wagmiConfig, { hash });
         setModal((m) => ({ ...m, status: 'success' }));
+        notify.success(`Claimed ${underlying}`);
         void refetchTokenBal();
         void refetchPending();
       })
@@ -248,7 +255,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
             Connect your wallet to deposit or withdraw.
           </p>
           <div className="mt-4 flex justify-center">
-            <ConnectButtonEque />
+            <WalletMenu />
           </div>
         </div>
       ) : !onRightChain ? (
