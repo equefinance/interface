@@ -16,6 +16,11 @@ export interface SelectOption {
   value: string
   /** Row content (plain text in every story; accepts nodes). */
   label: React.ReactNode
+  /**
+   * Optional trigger-only content. When set, the closed trigger renders
+   * this instead of `label` (popup rows still render `label`).
+   */
+  triggerLabel?: React.ReactNode
   /** Disabled rows render dimmed and skip highlight/selection. */
   disabled?: boolean
 }
@@ -114,12 +119,11 @@ function Select({
           className={triggerClassName}
         >
           <SelectValue placeholder={placeholder}>
-            {(current: string | null) =>
-              current === null || current === undefined
-                ? placeholder
-                : (options.find((option) => option.value === current)?.label ??
-                  current)
-            }
+            {(current: string | null) => {
+              if (current === null || current === undefined) return placeholder
+              const match = options.find((option) => option.value === current)
+              return match?.triggerLabel ?? match?.label ?? current
+            }}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>

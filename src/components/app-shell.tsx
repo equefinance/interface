@@ -18,8 +18,8 @@ const NAV = [
 ];
 
 const NETWORKS = [
-  { id: robinhoodTestnet.id, name: 'Robinhood' },
-  { id: baseSepolia.id, name: 'Base Sepolia' },
+  { id: robinhoodTestnet.id, name: 'Robinhood Testnet', iconSrc: '/assets/robinhood-logo.png' },
+  { id: baseSepolia.id, name: 'Base Sepolia', iconSrc: '/assets/base-logo.png' },
 ];
 
 const chainIdOf = (key: AppChainKey): number =>
@@ -63,6 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       chains={NETWORKS}
       value={chainIdOf(chain)}
       onValueChange={(id) => setChain(keyOf(id))}
+      showName={false}
     />
   );
 
@@ -76,6 +77,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               EQUE
             </span>
           </Link>
+
+          <div className="shrink-0">{switcher}</div>
 
           <nav className="hidden items-center gap-1 md:flex" aria-label="App sections">
             {NAV.map((item) => {
@@ -97,7 +100,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <div className="hidden md:block">{switcher}</div>
             <WalletMenu />
             <button
               type="button"
@@ -132,9 +134,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 );
               })}
             </nav>
-            <div className="mt-3 flex justify-center" onClick={() => setMenuOpen(false)}>
-              {switcher}
-            </div>
           </div>
         )}
       </header>

@@ -14,6 +14,8 @@ export interface NetworkChain {
   id: number
   /** Display name, text only (AGENTS.md §1: no chain icon component). */
   name: string
+  /** Per-chain icon image URL. Falls back to the `iconSrc` prop. */
+  iconSrc?: string
 }
 
 /** Network artwork: 20px sharp image, decorative. Renders nothing when no `iconSrc` is provided. */
@@ -45,10 +47,17 @@ export interface NetworkSwitcherProps {
   /**
    * Network icon image URL (e.g. `https://…/base.png`). Rendered as
    * decorative 20px artwork before the chain name in the trigger and
-   * popup rows. When omitted, no artwork renders — the name text
-   * carries the identity (AGENTS.md §1: no Network Icon component).
+   * popup rows. Per-chain `NetworkChain.iconSrc` wins when set. When
+   * omitted everywhere, no artwork renders — the name text carries the
+   * identity (AGENTS.md §1: no Network Icon component).
    */
   iconSrc?: string
+  /**
+   * When `false`, the closed trigger shows only the selected chain's
+   * icon (no name text) — `[(icon) ˅]`. Popup rows always keep icon +
+   * name so the list stays scannable.
+   */
+  showName?: boolean
   /** Placeholder shown before a chain is chosen. */
   placeholder?: string
   /** Disables the switcher. */
@@ -78,6 +87,7 @@ function NetworkSwitcher({
   defaultValue = null,
   onValueChange,
   iconSrc,
+  showName = true,
   placeholder = "Select network",
   disabled = false,
   id: idProp,
@@ -105,17 +115,22 @@ function NetworkSwitcher({
       </label>
       <Select
         id={id}
-        options={chains.map((chain) => ({
-          value: String(chain.id),
-          label: (
-            <span className="flex items-center gap-1.5">
-              <NetworkArt src={iconSrc} />
-              <span className="font-heading text-sm text-text-primary">
-                {chain.name}
+        options={chains.map((chain) => {
+          const art = chain.iconSrc ?? iconSrc
+          return {
+            value: String(chain.id),
+            label: (
+              <span className="flex items-center gap-1.5">
+                <NetworkArt src={art} />
+                <span className="font-heading text-sm text-text-primary">
+                  {chain.name}
+                </span>
               </span>
-            </span>
-          ),
-        }))}
+            ),
+            // Icon-only trigger: popup rows keep icon + name.
+            triggerLabel: showName ? undefined : <NetworkArt src={art} />,
+          }
+        })}
         value={value === null ? null : String(value)}
         onValueChange={handleChange}
         placeholder={placeholder}
