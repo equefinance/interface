@@ -1,19 +1,21 @@
 'use client';
 
+import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { formatUnits } from 'viem';
 import { WalletMenu } from '@/components/wallet-menu';
 import { AlertBanner } from '@/components/molecules/AlertBanner/AlertBanner';
 import { EmptyState } from '@/components/molecules/EmptyState/EmptyState';
 import { StatCard } from '@/components/molecules/StatCard/StatCard';
+import { Tabs } from '@/components/molecules/Tabs/Tabs';
 import { PortfolioSummaryCard } from '@/components/organisms/PortfolioSummaryCard/PortfolioSummaryCard';
 import { VaultListGrid } from '@/components/organisms/VaultListGrid/VaultListGrid';
 import { type VaultCardData } from '@/components/organisms/VaultCard/VaultCard';
 import { useOraclePrices } from '@/hooks/use-oracle-prices';
 import { usePortfolio } from '@/hooks/use-portfolio';
-import { useVaults, type VaultSummary } from '@/hooks/use-vaults';
-import { CHAIN_META } from '@/lib/chains';
-import { useChain } from '@/lib/chain-context';
+import { useAllVaults, useVaults, type VaultSummaryWithChain } from '@/hooks/use-vaults';
+import { CHAIN_META, type AppChainKey } from '@/lib/chains';
 import { TOKEN_DECIMALS } from '@/lib/eque-contracts';
 import { fmtApy, fmtTokens, underlyingOf } from '@/lib/format';
 import { formatTvl } from '@/lib/utils';
@@ -123,16 +125,29 @@ function PortfolioSection() {
   );
 }
 
+/** Token artwork shipped in `public/assets/tokens/`. */
+const TOKEN_ICON_SRC: Record<string, string> = {
+  NVDA: '/assets/tokens/nvda.webp',
+  AAPL: '/assets/tokens/aapl.webp',
+  TSLA: '/assets/tokens/tsla.webp',
+  META: '/assets/tokens/meta.webp',
+};
+
+const CHAIN_ICON_SRC: Record<AppChainKey, string> = {
+  'robinhood-testnet': '/assets/robinhood-logo.png',
+  'base-sepolia': '/assets/base-logo.png',
+};
+
 function vaultCardData(
-  vault: VaultSummary,
-  chainLabel: string,
+  vault: VaultSummaryWithChain,
   tvlUsd: number | undefined,
 ): VaultCardData {
   const underlying = underlyingOf(vault.symbol);
   return {
-    id: vault.vault,
+    id: `${vault.chainKey}:${vault.vault}`,
     name: vault.symbol,
     depositToken: underlying,
+    iconSrc: TOKEN_ICON_SRC[underlying],
     apyBase: (vault.apy ?? 0) * 100,
     apyReward: 0,
     apyBoost: 0,
@@ -140,31 +155,56 @@ function vaultCardData(
     // No risk classification: the backend doesn't provide one, so the card
     // omits the indicator instead of inventing a label.
     status: 'active',
-    chain: chainLabel,
+    chain: CHAIN_META[vault.chainKey].label,
+    chainIconSrc: CHAIN_ICON_SRC[vault.chainKey],
     strategy: 'Covered-call premium',
     tags: [underlying, 'Testnet'],
     audited: false,
   };
 }
 
-export default function DashboardPage() {
-  const { chain } = useChain();
-  const router = useRouter();
-  const { vaults, isLoading, error } = useVaults();
-  const { prices, isLoading: pricesLoading, isError: pricesError } = useOraclePrices();
+type ChainFilter = 'all' | AppChainKey;
 
-  const tvlUsdOf = (vault: VaultSummary): number | undefined => {
+function ChainTabLabel({ chainKey }: { chainKey: AppChainKey }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Image
+        src={CHAIN_ICON_SRC[chainKey]}
+        alt=""
+        width={16}
+        height={16}
+        className="size-4 shrink-0"
+        aria-hidden="true"
+      />
+      {CHAIN_META[chainKey].label}
+    </span>
+  );
+}
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const { vaults, isLoading, error } = useAllVaults();
+  const { prices, isLoading: pricesLoading, isError: pricesError } = useOraclePrices();
+  const [chainFilter, setChainFilter] = useState<ChainFilter>('all');
+
+  const tvlUsdOf = (vault: VaultSummaryWithChain): number | undefined => {
     if (vault.tvl === null) return undefined;
     const price = prices[underlyingOf(vault.symbol)];
     if (price === undefined) return undefined;
     return Number(formatUnits(BigInt(vault.tvl), TOKEN_DECIMALS)) * price;
   };
 
+  const visible =
+    chainFilter === 'all' ? vaults : vaults.filter((v) => v.chainKey === chainFilter);
+
   const loading = isLoading || pricesLoading;
-  const totalTvlUsd = vaults.reduce((sum, v) => sum + (tvlUsdOf(v) ?? 0), 0);
-  const bestApy = vaults.reduce((best, v) => Math.max(best, v.apy ?? 0), 0);
-  const liveEpochs = vaults.filter((v) => v.activeEpoch !== null).length;
-  const goVault = (symbol: string) => router.push(`/vault?symbol=${encodeURIComponent(symbol)}`);
+  const totalTvlUsd = visible.reduce((sum, v) => sum + (tvlUsdOf(v) ?? 0), 0);
+  const bestApy = visible.reduce((best, v) => Math.max(best, v.apy ?? 0), 0);
+  const liveEpochs = visible.filter((v) => v.activeEpoch !== null).length;
+  const goVault = (vault: VaultSummaryWithChain) =>
+    router.push(
+      `/vault?symbol=${encodeURIComponent(vault.symbol)}&chain=${vault.chainKey}`,
+    );
 
   return (
     <>
@@ -193,7 +233,7 @@ export default function DashboardPage() {
           <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard label="TOTAL TVL" value={loading ? '—' : formatTvl(totalTvlUsd)} loading={loading} />
             <StatCard label="BEST APY" value={loading ? '—' : fmtApy(bestApy)} loading={loading} />
-            <StatCard label="VAULTS" value={loading ? '—' : String(vaults.length)} loading={loading} />
+            <StatCard label="VAULTS" value={loading ? '—' : String(visible.length)} loading={loading} />
             <StatCard
               label="LIVE EPOCHS"
               value={loading ? '—' : String(liveEpochs)}
@@ -201,13 +241,28 @@ export default function DashboardPage() {
             />
           </div>
 
+          <Tabs
+            tabs={[
+              { value: 'all', label: 'All vaults' },
+              { value: 'robinhood-testnet', label: <ChainTabLabel chainKey="robinhood-testnet" /> },
+              { value: 'base-sepolia', label: <ChainTabLabel chainKey="base-sepolia" /> },
+            ]}
+            value={chainFilter}
+            onValueChange={(v) => setChainFilter(v as ChainFilter)}
+            className="mt-8"
+          />
+
           <VaultListGrid
-            vaults={vaults.map((vault) =>
-              vaultCardData(vault, CHAIN_META[chain].label, tvlUsdOf(vault)),
-            )}
+            vaults={visible.map((vault) => vaultCardData(vault, tvlUsdOf(vault)))}
             loading={loading}
-            onSelect={(v) => goVault(v.name)}
-            onDeposit={(v) => goVault(v.name)}
+            onSelect={(v) => {
+              const vault = visible.find((x) => `${x.chainKey}:${x.vault}` === v.id);
+              if (vault) goVault(vault);
+            }}
+            onDeposit={(v) => {
+              const vault = visible.find((x) => `${x.chainKey}:${x.vault}` === v.id);
+              if (vault) goVault(vault);
+            }}
             pageSize={6}
             className="mt-8"
           />

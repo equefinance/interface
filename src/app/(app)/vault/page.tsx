@@ -99,10 +99,22 @@ function VaultDetail({ vault }: { vault: VaultSummary }) {
 }
 
 function VaultPageInner() {
-  const { chain } = useChain();
+  const { chain, setChain } = useChain();
   const { vaults, isLoading, error } = useVaults();
   const searchParams = useSearchParams();
   const requested = searchParams.get('symbol');
+  const requestedChain = searchParams.get('chain');
+
+  // Deep-links from the all-chains dashboard carry ?chain= — follow it so a
+  // Base Sepolia vault never renders under the Robinhood data context.
+  useEffect(() => {
+    if (
+      (requestedChain === 'robinhood-testnet' || requestedChain === 'base-sepolia') &&
+      requestedChain !== chain
+    ) {
+      setChain(requestedChain);
+    }
+  }, [requestedChain, chain, setChain]);
 
   const symbols = useMemo(() => vaults.map((v) => v.symbol), [vaults]);
   const [selected, setSelected] = useState<string | null>(null);
