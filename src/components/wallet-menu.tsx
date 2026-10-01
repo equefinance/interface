@@ -2,6 +2,7 @@
 
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount, useDisconnect } from 'wagmi';
+import { Button } from '@/components/atoms/Button/Button';
 import { AccountDropdown } from '@/components/organisms/AccountDropdown/AccountDropdown';
 import { baseSepolia, robinhoodTestnet, type AppChainKey } from '@/lib/chains';
 import { useChain } from '@/lib/chain-context';
@@ -24,18 +25,14 @@ export function WalletMenu({ className }: { className?: string }) {
 
   if (!isConnected || !address) {
     return (
-      <button
+      <Button
         type="button"
+        variant="primary"
         onClick={openConnectModal}
-        className={cn(
-          'font-display inline-flex h-10 shrink-0 items-center gap-2 border border-eque-teal/60 bg-eque-teal px-4 text-[13px] font-medium tracking-[0.04em] text-eque-ink transition-colors duration-150 hover:bg-eque-teal-hover',
-          className,
-        )}
+        className={cn('shrink-0', className)}
       >
-        <span aria-hidden>▸</span>
-        <span className="hidden sm:inline">Connect Wallet</span>
-        <span className="sm:hidden">Connect</span>
-      </button>
+        Connect Wallet
+      </Button>
     );
   }
 
