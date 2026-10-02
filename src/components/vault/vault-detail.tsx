@@ -26,7 +26,10 @@ export function VaultApyBreakdown({ symbol, tvlUsd }: { symbol: string; tvlUsd: 
   const price = prices[underlyingOf(symbol)] ?? 0;
 
   const data: ApyBreakdownDatum[] = useMemo(() => {
-    if (tvlUsd <= 0 || price <= 0) return [];
+    // Mirror the backend's MIN_MEANINGFUL_TVL: dividing by dust TVL (observed:
+    // 1 wei) explodes the per-epoch APY into nonsense like 7.88e23%. Below $1
+    // of TVL the number is meaningless, so report no data instead.
+    if (!(tvlUsd >= 1) || price <= 0) return [];
     return epochs
       .filter((e) => (e.premiumCollected ?? e.winningBid) !== null)
       .map((e) => {

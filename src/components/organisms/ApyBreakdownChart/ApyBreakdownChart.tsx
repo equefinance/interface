@@ -40,6 +40,20 @@ export interface ApyBreakdownChartProps {
 }
 
 /**
+ * Percent formatting that never leaks exponential notation: `toFixed`
+ * returns e.g. "7.883999999999999e+23" for magnitudes >= 1e21, which is what
+ * produced the infamous "Current 7.883999999999999e+23%" label.
+ */
+function formatPct(v: number): string {
+  if (!Number.isFinite(v)) return "—";
+  const abs = Math.abs(v);
+  if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B%`;
+  if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M%`;
+  if (abs >= 1e4) return `${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
+  return `${v.toFixed(2)}%`;
+}
+
+/**
  * Chart palette (DESIGN.md §7.9): series order
  * `#1FFFC3 → #3BE3B6 → #57C7A9`, gridlines `#1A222D` (= border-subtle),
  * muted text `#718094`. Hex is required here — SVG presentation
@@ -92,7 +106,7 @@ function ChartTooltip({
               </span>
               <span className="font-mono text-xs text-text-primary">
                 {typeof row.value === "number"
-                  ? `${row.value.toFixed(2)}%`
+                  ? formatPct(row.value)
                   : row.value}
               </span>
             </div>
@@ -101,7 +115,7 @@ function ChartTooltip({
         <div className="mt-1 flex items-center justify-between gap-6 border-t border-border-subtle pt-1.5">
           <span className="text-xs text-text-tertiary">Total</span>
           <span className="font-mono text-xs font-bold text-primary">
-            {total.toFixed(2)}%
+            {formatPct(total)}
           </span>
         </div>
       </div>
@@ -139,7 +153,7 @@ function ApyBreakdownChart({
           <p className="font-mono text-sm text-text-secondary">
             <span className="mr-2 text-xs text-text-tertiary">Current</span>
             <span className="font-bold text-primary">
-              {latestTotal.toFixed(2)}%
+              {formatPct(latestTotal)}
             </span>
           </p>
         ) : null}
@@ -156,7 +170,7 @@ function ApyBreakdownChart({
         <>
           <div
             role="img"
-            aria-label={`${title}: stacked base, rewards, and boost APY across ${data.length} periods, currently ${latestTotal.toFixed(2)} percent total.`}
+            aria-label={`${title}: stacked base, rewards, and boost APY across ${data.length} periods, currently ${formatPct(latestTotal)} total.`}
           >
             <ResponsiveContainer width="100%" height={height}>
               <BarChart
@@ -177,7 +191,7 @@ function ApyBreakdownChart({
                   axisLine={false}
                   width={44}
                   tick={{ fill: "#718094", fontSize: 11 }}
-                  tickFormatter={(v: number) => `${v}%`}
+                  tickFormatter={(v: number) => formatPct(v)}
                 />
                 <RechartsTooltip
                   content={<ChartTooltip />}

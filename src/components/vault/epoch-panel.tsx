@@ -3,7 +3,7 @@
 import { formatUnits } from 'viem';
 import { useNow } from '@/hooks/use-now';
 import type { VaultSummary } from '@/hooks/use-vaults';
-import { ORACLE_DECIMALS } from '@/lib/eque-contracts';
+import { STRATEGY_PRICE_DECIMALS } from '@/lib/eque-contracts';
 import { fmtCountdown, fmtTokens } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -62,7 +62,7 @@ export function EpochPanel({ vault }: { vault: VaultSummary }) {
           <dl className="mt-4 divide-y divide-eque-line border-t border-eque-line">
             <Row label="STRIKE PRICE">
               {epoch.strikePrice !== null ? (
-                <>${Number(formatUnits(BigInt(epoch.strikePrice), ORACLE_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}</>
+                <>${Number(formatUnits(BigInt(epoch.strikePrice), STRATEGY_PRICE_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}</>
               ) : (
                 <span className="text-eque-muted">set at auction close</span>
               )}

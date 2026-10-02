@@ -4,8 +4,16 @@ import type { AppChainKey } from './chains';
 import { underlyingOf } from './format';
 
 export const TOKEN_DECIMALS = 18;
-/** Oracle (strike price) decimals — MockV3Aggregator everywhere for now. */
+/** Raw price-feed decimals — MockV3Aggregator everywhere for now. */
 export const ORACLE_DECIMALS = 8;
+/**
+ * Decimals of strike/spot prices as stored by EpochStrategy. The strategy
+ * normalizes feed prices to 18 decimals internally, so values read from the
+ * strategy (epoch strike/spot, auction status) must be formatted with 18,
+ * NOT the feed's 8 — formatting with 8 inflates the display 1e10x
+ * (observed: strike $242.55 rendered as $2,425,500,000,000).
+ */
+export const STRATEGY_PRICE_DECIMALS = 18;
 
 /**
  * Withdrawal-queue functions. The SDK's EqueVaultAbi *type* declaration is

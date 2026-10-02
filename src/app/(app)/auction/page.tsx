@@ -17,7 +17,7 @@ import { useEpochHistory } from '@/hooks/use-epoch-history';
 import { useOraclePrices } from '@/hooks/use-oracle-prices';
 import { useVaults } from '@/hooks/use-vaults';
 import { useChain } from '@/lib/chain-context';
-import { ORACLE_DECIMALS, TOKEN_DECIMALS } from '@/lib/eque-contracts';
+import { STRATEGY_PRICE_DECIMALS, TOKEN_DECIMALS } from '@/lib/eque-contracts';
 import { underlyingOf } from '@/lib/format';
 
 function phaseOf(state: string): EpochPhase {
@@ -47,7 +47,7 @@ function AuctionDetail({ symbol }: { symbol: string }) {
     const strike =
       shown.strikePrice === null
         ? 0
-        : Number(formatUnits(BigInt(shown.strikePrice), ORACLE_DECIMALS));
+        : Number(formatUnits(BigInt(shown.strikePrice), STRATEGY_PRICE_DECIMALS));
     const sorted = [...bids]
       .map((b) => ({
         bidder: b.bidder,

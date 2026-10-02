@@ -2,7 +2,7 @@
 
 import { formatUnits } from 'viem';
 import { useEpochHistory } from '@/hooks/use-epoch-history';
-import { ORACLE_DECIMALS } from '@/lib/eque-contracts';
+import { STRATEGY_PRICE_DECIMALS } from '@/lib/eque-contracts';
 import { fmtTokens } from '@/lib/format';
 
 const fmtDate = (unixSec: number): string =>
@@ -65,7 +65,7 @@ export function EpochHistory({ symbol }: { symbol: string }) {
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-eque-text">
                       {e.strikePrice !== null
-                        ? `$${Number(formatUnits(BigInt(e.strikePrice), ORACLE_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                        ? `$${Number(formatUnits(BigInt(e.strikePrice), STRATEGY_PRICE_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
                         : '—'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-eque-text">
