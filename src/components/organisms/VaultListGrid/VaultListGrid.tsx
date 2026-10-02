@@ -108,11 +108,34 @@ function VaultListGrid({
 
   const filters: FilterDef[] = React.useMemo(() => {
     const chains = [...new Set(vaults.map((v) => v.chain))].sort();
+    const chainIconOf = (chain: string) =>
+      vaults.find((v) => v.chain === chain)?.chainIconSrc;
     return [
       {
         id: "chain",
         label: "Chain",
-        options: chains.map((c) => ({ value: c, label: c })),
+        options: chains.map((c) => {
+          const iconSrc = chainIconOf(c);
+          return {
+            value: c,
+            label: (
+              <span className="flex items-center gap-1.5">
+                {iconSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- consumer-supplied chain art
+                  <img
+                    src={iconSrc}
+                    alt=""
+                    aria-hidden="true"
+                    width={16}
+                    height={16}
+                    className="size-4 shrink-0"
+                  />
+                ) : null}
+                <span>{c}</span>
+              </span>
+            ),
+          };
+        }),
       },
       {
         id: "risk",

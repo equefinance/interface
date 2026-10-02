@@ -12,8 +12,8 @@ import { cn } from "cn"
 export interface FilterOption {
   /** Stable value. */
   value: string
-  /** Display label. */
-  label: string
+  /** Display label — accepts nodes so options can carry icons. */
+  label: React.ReactNode
 }
 
 /** One filter dropdown (chain, risk, status, …). */

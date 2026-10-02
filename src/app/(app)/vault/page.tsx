@@ -1,23 +1,67 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { formatUnits } from 'viem';
+import { Breadcrumb } from '@/components/breadcrumb';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DepositPanel } from '@/components/vault/deposit-panel';
 import { EpochHistory } from '@/components/vault/epoch-history';
 import { EpochPanel } from '@/components/vault/epoch-panel';
 import { AlertBanner } from '@/components/molecules/AlertBanner/AlertBanner';
-import { Tabs } from '@/components/molecules/Tabs/Tabs';
 import { ApyBreakdownChart, type ApyBreakdownDatum } from '@/components/organisms/ApyBreakdownChart/ApyBreakdownChart';
 import { PerformanceChart } from '@/components/organisms/PerformanceChart/PerformanceChart';
 import { StrategyInfoPanel } from '@/components/organisms/StrategyInfoPanel/StrategyInfoPanel';
+import { VaultListGrid } from '@/components/organisms/VaultListGrid/VaultListGrid';
+import { type VaultCardData } from '@/components/organisms/VaultCard/VaultCard';
 import { useEpochHistory } from '@/hooks/use-epoch-history';
 import { useOraclePrices } from '@/hooks/use-oracle-prices';
 import { usePerformance } from '@/hooks/use-performance';
-import { useVaults, type VaultSummary } from '@/hooks/use-vaults';
+import { useAllVaults, type VaultSummary, type VaultSummaryWithChain } from '@/hooks/use-vaults';
 import { useChain } from '@/lib/chain-context';
+import { CHAIN_META, type AppChainKey } from '@/lib/chains';
 import { TOKEN_DECIMALS } from '@/lib/eque-contracts';
 import { underlyingOf } from '@/lib/format';
+
+/** Token artwork shipped in `public/assets/tokens/`. */
+const TOKEN_ICON_SRC: Record<string, string> = {
+  NVDA: '/assets/tokens/nvda.webp',
+  AAPL: '/assets/tokens/aapl.webp',
+  TSLA: '/assets/tokens/tsla.webp',
+  META: '/assets/tokens/meta.webp',
+};
+
+const CHAIN_ICON_SRC: Record<AppChainKey, string> = {
+  'robinhood-testnet': '/assets/robinhood-logo.png',
+  'base-sepolia': '/assets/base-logo.png',
+};
+
+function vaultCardData(
+  vault: VaultSummaryWithChain,
+  tvlUsd: number | undefined,
+): VaultCardData {
+  const underlying = underlyingOf(vault.symbol);
+  return {
+    id: `${vault.chainKey}:${vault.vault}`,
+    name: vault.symbol,
+    depositToken: underlying,
+    iconSrc: TOKEN_ICON_SRC[underlying],
+    apyBase: (vault.apy ?? 0) * 100,
+    apyReward: 0,
+    apyBoost: 0,
+    tvl: tvlUsd ?? 0,
+    // No risk classification: the backend doesn't provide one, so the card
+    // omits the indicator instead of inventing a label.
+    status: 'active',
+    chain: CHAIN_META[vault.chainKey].label,
+    chainIconSrc: CHAIN_ICON_SRC[vault.chainKey],
+    strategy: 'Covered-call premium',
+    // Verified onchain 2026-10-02: every vault targets 70% epoch / 30% lending.
+    strategies: ['lending', 'covered-call'],
+    tags: [underlying, 'Testnet'],
+    audited: false,
+  };
+}
 
 /**
  * Per-epoch realized APY, annualized from the collected premium.
@@ -60,7 +104,7 @@ function VaultDetail({ vault }: { vault: VaultSummary }) {
 
   return (
     <>
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <DepositPanel key={vault.symbol} symbol={vault.symbol} />
         <EpochPanel vault={vault} />
       </div>
@@ -72,8 +116,8 @@ function VaultDetail({ vault }: { vault: VaultSummary }) {
 
       <StrategyInfoPanel
         className="mt-8"
-        strategyName="Covered-call premium"
-        description="Every epoch, the vault auctions a covered call on its holdings to market makers. The winning premium is added straight back into the vault — your shares capture it automatically, no claiming, no rolling."
+        strategyName="Covered-call premium + lending"
+        description="Every epoch, the vault auctions a covered call on 70% of its holdings to market makers. The winning premium is added straight back into the vault — your shares capture it automatically, no claiming, no rolling. The other 30% sits in Morpho lending earning borrow interest."
         protocols={['Eque', 'Morpho']}
         compoundingSteps={[
           'Deposit and receive eVault shares (ERC-4626).',
@@ -100,48 +144,84 @@ function VaultDetail({ vault }: { vault: VaultSummary }) {
 
 function VaultPageInner() {
   const { chain, setChain } = useChain();
-  const { vaults, isLoading, error } = useVaults();
+  const { vaults, isLoading, error } = useAllVaults();
+  const { prices, isLoading: pricesLoading } = useOraclePrices();
   const searchParams = useSearchParams();
-  const requested = searchParams.get('symbol');
-  const requestedChain = searchParams.get('chain');
+  const [selected, setSelected] = useState<VaultSummaryWithChain | null>(null);
+  const savedChain = useRef<AppChainKey | null>(null);
 
-  // Deep-links from the all-chains dashboard carry ?chain= — follow it so a
-  // Base Sepolia vault never renders under the Robinhood data context.
-  useEffect(() => {
-    if (
-      (requestedChain === 'robinhood-testnet' || requestedChain === 'base-sepolia') &&
-      requestedChain !== chain
-    ) {
-      setChain(requestedChain);
+  const tvlUsdOf = (vault: VaultSummaryWithChain): number | undefined => {
+    if (vault.tvl === null) return undefined;
+    const price = prices[underlyingOf(vault.symbol)];
+    if (price === undefined) return undefined;
+    return Number(formatUnits(BigInt(vault.tvl), TOKEN_DECIMALS)) * price;
+  };
+
+  const loading = isLoading || pricesLoading;
+
+  // The modal's detail hooks read the chain from context — point the context
+  // at the vault's chain while it's open, restore on close.
+  const openVault = (vault: VaultSummaryWithChain) => {
+    savedChain.current = chain;
+    if (vault.chainKey !== chain) setChain(vault.chainKey);
+    setSelected(vault);
+  };
+
+  const closeVault = () => {
+    setSelected(null);
+    if (savedChain.current && savedChain.current !== chain) {
+      setChain(savedChain.current);
     }
-  }, [requestedChain, chain, setChain]);
+    savedChain.current = null;
+  };
 
-  const symbols = useMemo(() => vaults.map((v) => v.symbol), [vaults]);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  // Follow ?symbol= when it names a real vault; otherwise the first vault.
-  // Derived during render (no effect): a user-picked tab sticks while it
-  // still names a real vault, and resets when the chain changes the list.
-  const active =
-    (selected && symbols.includes(selected) ? selected : null) ??
-    (requested && symbols.includes(requested) ? requested : null) ??
-    symbols[0] ??
-    null;
-
-  const vault = vaults.find((v) => v.symbol === active) ?? null;
+  // Deep-link: ?symbol=evNVDA&chain=robinhood-testnet opens the modal.
+  const requestedSymbol = searchParams.get('symbol');
+  const requestedChain = searchParams.get('chain');
+  useEffect(() => {
+    if (requestedSymbol && !selected && vaults.length > 0) {
+      const match =
+        vaults.find(
+          (v) =>
+            v.symbol === requestedSymbol &&
+            (requestedChain === 'robinhood-testnet' || requestedChain === 'base-sepolia'
+              ? v.chainKey === requestedChain
+              : true),
+        ) ?? null;
+      if (match) openVault(match);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedSymbol, requestedChain, vaults.length]);
 
   useEffect(() => {
-    document.title = active ? `Eque - ${active}` : 'Eque';
+    document.title = selected ? `Eque - ${selected.symbol}` : 'Eque';
     return () => {
       document.title = 'Eque';
     };
-  }, [active]);
+  }, [selected]);
+
+  const cards = useMemo(
+    () => vaults.map((vault) => vaultCardData(vault, tvlUsdOf(vault))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [vaults, prices],
+  );
+
+  const openByCard = (card: VaultCardData) => {
+    const vault = vaults.find((v) => `${v.chainKey}:${v.vault}` === card.id);
+    if (vault) openVault(vault);
+  };
 
   return (
     <>
-      <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-eque-hero sm:text-4xl">
-        Vault
-      </h1>
+      <Breadcrumb
+        items={[
+          { label: 'Home', href: '/' },
+          selected
+            ? { label: 'Vault', onClick: closeVault }
+            : { label: 'Vault' },
+          ...(selected ? [{ label: selected.symbol }] : []),
+        ]}
+      />
 
       {error ? (
         <div className="mt-8">
@@ -151,25 +231,51 @@ function VaultPageInner() {
             message="Is NEXT_PUBLIC_API_URL set and the backend running?"
           />
         </div>
-      ) : isLoading || !vault ? (
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-72 animate-pulse border border-eque-line bg-eque-surface" />
-          ))}
-        </div>
       ) : (
-        <>
-          <Tabs
-            tabs={symbols.map((s) => ({ value: s, label: s }))}
-            value={active ?? undefined}
-            onValueChange={(v) => setSelected(v)}
-            className="mt-8"
-            aria-label="Vaults"
-          />
-
-          <VaultDetail key={`${chain}:${vault.symbol}`} vault={vault} />
-        </>
+        <VaultListGrid
+          vaults={cards}
+          loading={loading}
+          onSelect={openByCard}
+          onDeposit={openByCard}
+          pageSize={6}
+          className="mt-8"
+        />
       )}
+
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) closeVault();
+        }}
+      >
+        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-3xl lg:max-w-5xl">
+          {selected && (
+            <>
+              <DialogTitle className="font-display text-xl font-bold tracking-[-0.01em] text-eque-hero">
+                {selected.symbol}
+                <span className="ml-3 align-middle font-body text-[12px] font-normal tracking-normal text-eque-muted">
+                  {CHAIN_META[selected.chainKey].label}
+                </span>
+              </DialogTitle>
+              {chain === selected.chainKey ? (
+                <VaultDetail
+                  key={`${selected.chainKey}:${selected.symbol}`}
+                  vault={selected}
+                />
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2" aria-label="Loading vault detail">
+                  {[0, 1].map((i) => (
+                    <div
+                      key={i}
+                      className="h-72 animate-pulse border border-eque-line bg-eque-surface"
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
