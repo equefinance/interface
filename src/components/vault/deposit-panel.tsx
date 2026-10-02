@@ -54,8 +54,8 @@ export function DepositPanel({ symbol }: { symbol: string }) {
   const now = useNow(30_000);
   const { prices } = useOraclePrices();
 
-  const [approveStatus, setApproveStatus] = useState<ApproveStepStatus>('pending');
-  const [depositStatus, setDepositStatus] = useState<ApproveStepStatus>('pending');
+  const [approving, setApproving] = useState(false);
+  const [depositing, setDepositing] = useState(false);
   const [modal, setModal] = useState<TxModal>({ open: false, status: 'pending', title: '' });
 
   const contracts = useMemo(() => getVaultContracts(chain, symbol), [chain, symbol]);
@@ -128,15 +128,27 @@ export function DepositPanel({ symbol }: { symbol: string }) {
     }
   };
 
+  const needsApproval = (allowance ?? 0n) === 0n;
   // Approval covers exactly the entered deposit amount; a fresh approval is
   // needed per deposit once the previous allowance is spent.
-  const needsApproval = (allowance ?? 0n) === 0n;
+  //
+  // Step statuses are derived, not stored: the kit only renders the approve
+  // button while the step is 'active'/'loading'. A stored 'pending' initial
+  // value left the flow open with no actionable button — no wallet popup,
+  // dead end. Deriving from allowance also fixes the stale-'done' case where
+  // a second deposit would skip approval after the first allowance was spent.
+  const approveStatus: ApproveStepStatus =
+    !needsApproval ? 'done' : approving ? 'loading' : 'active';
+  const flowDepositStatus: ApproveStepStatus =
+    depositing ? 'loading' : !needsApproval ? 'active' : 'pending';
   const hasPendingRedeem = (pendingRedeem ?? 0n) > 0n;
   const claimReady =
     hasPendingRedeem && redeemReadyAt !== undefined && BigInt(redeemReadyAt) <= BigInt(now);
   const busy = modal.open && modal.status === 'pending';
 
   const fail = (title: string) => (e: unknown) => {
+    setApproving(false);
+    setDepositing(false);
     notify.error(title, { description: errMsg(e) });
     setModal((m) => ({ ...m, status: 'failed', errorMessage: errMsg(e), title }));
   };
@@ -145,7 +157,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
     if (!address) return;
     const assets = toAssets(amountStr);
     if (assets === null || assets === 0n) return;
-    setApproveStatus('loading');
+    setApproving(true);
     setModal({ open: true, status: 'pending', title: `Approving ${amountStr} ${underlying}` });
     writeContractAsync({
       address: contracts.token,
@@ -158,7 +170,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
         setModal((m) => ({ ...m, txHash: hash }));
         await waitForTransactionReceipt(wagmiConfig, { hash });
         await refetchAllowance();
-        setApproveStatus('done');
+        setApproving(false);
         setModal((m) => ({ ...m, status: 'success' }));
         notify.success(`Approved ${amountStr} ${underlying}`);
       })
@@ -171,7 +183,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
       const assets = toAssets(amountStr);
       if (assets === null || assets === 0n) return;
       const amount = amountStr.trim();
-      setDepositStatus('loading');
+      setDepositing(true);
       setModal({ open: true, status: 'pending', title: `Depositing ${amount} ${underlying}` });
       writeContractAsync({
         address: contracts.vault,
@@ -183,7 +195,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
         .then(async (hash) => {
           setModal((m) => ({ ...m, txHash: hash }));
           await waitForTransactionReceipt(wagmiConfig, { hash });
-          setDepositStatus('done');
+          setDepositing(false);
           setModal((m) => ({ ...m, status: 'success' }));
           notify.success(`Deposited ${amount} ${underlying}`);
           void refetchTokenBal();
@@ -287,7 +299,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
           slippageBps={0}
           needsApproval={needsApproval}
           approveStatus={approveStatus}
-          depositStatus={depositStatus}
+          depositStatus={flowDepositStatus}
           submitting={busy}
           onApprove={onApprove}
           onSubmit={onSubmit}
