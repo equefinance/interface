@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ShieldCheck } from "lucide-react";
+import { Gavel, ShieldCheck, Zap } from "lucide-react";
 import { cn } from "cn";
 import { formatTvl } from "@/lib/utils";
 import { Badge } from "@/components/atoms/Badge/Badge";
@@ -54,6 +54,12 @@ export interface VaultCardData {
   chainIconSrc?: string;
   /** One-line strategy description. */
   strategy: string;
+  /**
+   * Strategy split badges, Beefy-style. When provided, the strategy text
+   * line is replaced by `[icon LABEL]` badges — no percentages, just the
+   * strategy names (e.g. `['lending', 'covered-call']`).
+   */
+  strategies?: ("lending" | "covered-call")[];
   /** Strategy/ecosystem icon image URL. Omitted → no icon. */
   strategyIconSrc?: string;
   /** Custom tags, e.g. ["Stocks", "LP Token"] — stacked top-right. */
@@ -212,19 +218,34 @@ function VaultCard({
         </Heading>
       </div>
 
-      {/* Strategy line with ecosystem icon */}
-      <div className="mt-2.5 flex items-center gap-2">
-        {vault.strategyIconSrc ? (
-          <img
-            src={vault.strategyIconSrc}
-            alt=""
-            className="size-3.5 shrink-0 object-cover"
-          />
-        ) : null}
-        <Text variant="body-s" className="text-text-secondary">
-          {vault.strategy}
-        </Text>
-      </div>
+      {/* Strategy split badges (Beefy-style) or fallback text line */}
+      {vault.strategies && vault.strategies.length > 0 ? (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {vault.strategies.map((s) => {
+            const Icon = s === "lending" ? Zap : Gavel
+            const label = s === "lending" ? "LENDING" : "COVERED-CALL"
+            return (
+              <Badge key={s} variant="neutral" className="gap-1">
+                <Icon aria-hidden="true" className="size-3" />
+                {label}
+              </Badge>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="mt-2.5 flex items-center gap-2">
+          {vault.strategyIconSrc ? (
+            <img
+              src={vault.strategyIconSrc}
+              alt=""
+              className="size-3.5 shrink-0 object-cover"
+            />
+          ) : null}
+          <Text variant="body-s" className="text-text-secondary">
+            {vault.strategy}
+          </Text>
+        </div>
+      )}
 
       {/* APY hero + TVL */}
       <div className="mt-5 flex items-end justify-between gap-4">
