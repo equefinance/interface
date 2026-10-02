@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { formatUnits, type Address } from 'viem';
 import { toast } from 'sonner';
+import { Breadcrumb } from '@/components/breadcrumb';
 import { Button } from '@/components/atoms/Button';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text, Heading } from '@/components/atoms/Typography';
@@ -121,10 +122,8 @@ export default function FaucetPage() {
 
   return (
     <>
-      <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-eque-hero sm:text-4xl">
-        Faucet
-      </h1>
-      <p className="font-body mt-2 max-w-[68ch] text-[13px] leading-relaxed text-eque-muted">
+      <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Faucet' }]} />
+      <p className="font-body mt-8 max-w-[68ch] text-[13px] leading-relaxed text-eque-muted">
         Claim free testnet tokens to try the vaults. One claim per cooldown window —
         depositor tokens go into vaults, bidder tokens let you bid in auctions.
       </p>

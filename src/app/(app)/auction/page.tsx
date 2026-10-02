@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { formatUnits } from 'viem';
+import { Breadcrumb } from '@/components/breadcrumb';
 import { AlertBanner } from '@/components/molecules/AlertBanner/AlertBanner';
 import { EmptyState } from '@/components/molecules/EmptyState/EmptyState';
 import { Tabs } from '@/components/molecules/Tabs/Tabs';
@@ -135,10 +136,8 @@ function AuctionPageInner() {
 
   return (
     <>
-      <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-eque-hero sm:text-4xl">
-        Auction
-      </h1>
-      <p className="font-body mt-2 max-w-[68ch] text-[13px] leading-relaxed text-eque-muted">
+      <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Auction' }]} />
+      <p className="font-body mt-8 max-w-[68ch] text-[13px] leading-relaxed text-eque-muted">
         Watch each epoch&apos;s covered-call auction clear in real time — no bidding
         needed to earn.
       </p>
