@@ -277,6 +277,7 @@ export function DepositPanel({ symbol }: { symbol: string }) {
         <DepositWithdrawPanel
           vaultName={symbol}
           token={tokenOf(underlying)}
+          tokenIconSrc={`/assets/tokens/${underlying.toLowerCase()}.webp`}
           tokenBalance={Number(formatUnits(tokenBal ?? 0n, TOKEN_DECIMALS))}
           withdrawableBalance={Number(formatUnits(withdrawableAssets ?? 0n, TOKEN_DECIMALS))}
           tokenPriceUsd={prices[underlying]}

@@ -40,15 +40,17 @@ function vaultCardData(
     apyReward: 0,
     apyBoost: 0,
     tvl: tvlUsd ?? 0,
-    // No risk classification: the backend doesn't provide one, so the card
-    // omits the indicator instead of inventing a label.
+    // Risk is derived from the strategy mix, not the backend (which provides
+    // no classification): every vault runs the same 70% covered-call / 30%
+    // lending split on a single stock — medium by construction. Verified
+    // onchain 2026-10-02.
+    risk: 'medium',
     status: 'active',
     chain: CHAIN_META[vault.chainKey].label,
     chainIconSrc: CHAIN_ICON_SRC[vault.chainKey],
     strategy: 'Covered-call premium',
     // Verified onchain 2026-10-02: every vault targets 70% epoch / 30% lending.
     strategies: ['lending', 'covered-call'],
-    tags: [underlying, 'Testnet'],
     audited: false,
   };
 }

@@ -150,14 +150,10 @@ function VaultCard({
         </span>
       ) : null}
 
-      {/* Custom tags, stacked top-right */}
-      {vault.tags && vault.tags.length > 0 ? (
-        <div className="mb-4 flex flex-col items-end gap-1.5">
-          {vault.tags.map((tag) => (
-            <Badge key={tag} variant="neutral">
-              {tag}
-            </Badge>
-          ))}
+      {/* Risk level, top-right */}
+      {vault.risk ? (
+        <div className="mb-2 flex justify-end">
+          <RiskLevelIndicator level={vault.risk} />
         </div>
       ) : null}
 
