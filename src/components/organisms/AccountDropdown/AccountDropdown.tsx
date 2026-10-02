@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Copy, LogOut, Repeat } from "lucide-react"
+import { Check, Copy, LogOut } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,20 +10,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
 import { WalletAddressChip } from "@/components/molecules/WalletAddressChip/WalletAddressChip"
 import { truncateAddress } from "@/lib/utils"
 import { cn } from "cn"
+
+export interface AccountChain {
+  /** Chain id. */
+  id: number
+  /** Display name (tooltip + aria-label; never rendered as text). */
+  name: string
+  /** Chain logo image URL. */
+  iconSrc: string
+}
 
 export interface AccountDropdownProps {
   /** Connected wallet address. */
   address: string
   /** Mock balance line, e.g. "12.5 ETH". */
   balance?: string
-  /** Current network name (text badge — no chain icon per exclusion rule). */
-  networkName?: string
-  /** Fires when "Switch network" is clicked (host opens a switcher). */
-  onSwitchNetwork?: () => void
+  /** Chains offered in the Switch Network section (icon-only buttons). */
+  chains?: AccountChain[]
+  /** Currently active chain id — gets the highlighted treatment. */
+  activeChainId?: number | null
+  /** Fires with the newly selected chain id. */
+  onChainChange?: (chainId: number) => void
   /** Fires when "Disconnect" is clicked. */
   onDisconnect?: () => void
   /** Block-explorer URL for the address chip. */
@@ -35,14 +45,15 @@ export interface AccountDropdownProps {
 /**
  * Account Dropdown (3.2) — dropdown menu triggered from a
  * WalletAddressChip. Shows the truncated address with copy feedback,
- * mock balance, a network-switcher entry point, and a disconnect
- * action. Chain shown as a text badge (exclusion rule, AGENTS.md §1).
+ * mock balance, an icon-only Switch Network section, and a disconnect
+ * action.
  */
 function AccountDropdown({
   address,
   balance,
-  networkName = "Base Sepolia",
-  onSwitchNetwork,
+  chains = [],
+  activeChainId = null,
+  onChainChange,
   onDisconnect,
   explorerUrl,
   className,
@@ -106,17 +117,43 @@ function AccountDropdown({
           </div>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={onSwitchNetwork}
-          className="justify-between"
-        >
-          <span className="flex items-center gap-2">
-            <Repeat aria-hidden="true" className="size-4 text-text-tertiary" />
-            Switch network
-          </span>
-          <Badge variant="neutral">{networkName}</Badge>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {chains.length > 0 ? (
+          <>
+            <DropdownMenuLabel>Switch Network</DropdownMenuLabel>
+            <div className="flex items-center gap-2 px-2 pb-1.5">
+              {chains.map((c) => {
+                const active = c.id === activeChainId
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => onChainChange?.(c.id)}
+                    title={c.name}
+                    aria-label={`Switch to ${c.name}`}
+                    aria-pressed={active}
+                    className={cn(
+                      "flex size-9 cursor-pointer items-center justify-center border outline-none transition-colors duration-micro ease-eque focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-primary",
+                      active
+                        ? "border-primary bg-primary-a08"
+                        : "border-border-subtle hover:border-border-accent"
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- consumer-supplied chain art */}
+                    <img
+                      src={c.iconSrc}
+                      alt=""
+                      aria-hidden="true"
+                      width={20}
+                      height={20}
+                      className="size-5 shrink-0"
+                    />
+                  </button>
+                )
+              })}
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem variant="destructive" onClick={onDisconnect}>
           <LogOut aria-hidden="true" className="size-4" />
           Disconnect

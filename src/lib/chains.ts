@@ -24,3 +24,9 @@ export const CHAIN_META: Record<AppChainKey, { label: string; short: string }> =
   'robinhood-testnet': { label: 'Robinhood Testnet', short: 'Robinhood' },
   'base-sepolia': { label: 'Base Sepolia', short: 'Base' },
 };
+
+export const chainIdOf = (key: AppChainKey): number =>
+  key === 'robinhood-testnet' ? robinhoodTestnet.id : baseSepolia.id;
+
+export const keyOf = (id: number): AppChainKey =>
+  id === baseSepolia.id ? 'base-sepolia' : 'robinhood-testnet';

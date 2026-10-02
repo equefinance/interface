@@ -4,10 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { NetworkSwitcher } from '@/components/molecules/NetworkSwitcher/NetworkSwitcher';
 import { WalletMenu } from '@/components/wallet-menu';
-import { baseSepolia, robinhoodTestnet, type AppChainKey } from '@/lib/chains';
-import { useChain } from '@/lib/chain-context';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -16,17 +13,6 @@ const NAV = [
   { href: '/auction', label: 'Auction' },
   { href: '/faucet', label: 'Faucet' },
 ];
-
-const NETWORKS = [
-  { id: robinhoodTestnet.id, name: 'Robinhood Testnet', iconSrc: '/assets/robinhood-logo.png' },
-  { id: baseSepolia.id, name: 'Base Sepolia', iconSrc: '/assets/base-logo.png' },
-];
-
-const chainIdOf = (key: AppChainKey): number =>
-  key === 'robinhood-testnet' ? robinhoodTestnet.id : baseSepolia.id;
-
-const keyOf = (id: number): AppChainKey =>
-  id === baseSepolia.id ? 'base-sepolia' : 'robinhood-testnet';
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
@@ -55,17 +41,7 @@ function MenuIcon({ open }: { open: boolean }) {
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { chain, setChain } = useChain();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const switcher = (
-    <NetworkSwitcher
-      chains={NETWORKS}
-      value={chainIdOf(chain)}
-      onValueChange={(id) => setChain(keyOf(id))}
-      showName={false}
-    />
-  );
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -77,8 +53,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               EQUE
             </span>
           </Link>
-
-          <div className="shrink-0">{switcher}</div>
 
           <nav className="hidden items-center gap-1 md:flex" aria-label="App sections">
             {NAV.map((item) => {

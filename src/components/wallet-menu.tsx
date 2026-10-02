@@ -4,12 +4,14 @@ import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount, useDisconnect } from 'wagmi';
 import { Button } from '@/components/atoms/Button/Button';
 import { AccountDropdown } from '@/components/organisms/AccountDropdown/AccountDropdown';
-import { baseSepolia, robinhoodTestnet, type AppChainKey } from '@/lib/chains';
+import { baseSepolia, chainIdOf, keyOf, robinhoodTestnet } from '@/lib/chains';
 import { useChain } from '@/lib/chain-context';
 import { cn } from '@/lib/utils';
 
-const browseLabel = (chain: AppChainKey): string =>
-  chain === 'robinhood-testnet' ? 'Robinhood Testnet' : 'Base Sepolia';
+const CHAINS = [
+  { id: chainIdOf('robinhood-testnet'), name: 'Robinhood Testnet', iconSrc: '/assets/robinhood-logo.png' },
+  { id: chainIdOf('base-sepolia'), name: 'Base Sepolia', iconSrc: '/assets/base-logo.png' },
+] as const;
 
 /**
  * Wallet entry point for the app header. Disconnected → connect button
@@ -21,7 +23,7 @@ export function WalletMenu({ className }: { className?: string }) {
   const { address, isConnected, chainId } = useAccount();
   const { disconnect } = useDisconnect();
   const { openConnectModal } = useConnectModal();
-  const { chain: browseChain } = useChain();
+  const { chain: browseChain, setChain } = useChain();
 
   if (!isConnected || !address) {
     return (
@@ -47,7 +49,9 @@ export function WalletMenu({ className }: { className?: string }) {
   return (
     <AccountDropdown
       address={address}
-      networkName={walletChain?.name ?? browseLabel(browseChain)}
+      chains={[...CHAINS]}
+      activeChainId={chainIdOf(browseChain)}
+      onChainChange={(id) => setChain(keyOf(id))}
       explorerUrl={explorerBase ? `${explorerBase}/address/${address}` : undefined}
       onDisconnect={() => disconnect()}
       className={cn('shrink-0', className)}
